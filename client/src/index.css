@@ -1,0 +1,119 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer utilities {
+.btn {
+    @apply text-white bg-gradient-to-r from-[#7d71ff] to-[#8426ffbe] focus:ring-4 focus:outline-none focus:ring-blue-300 font-medium rounded-lg text-sm px-5 py-2.5 text-center;
+  }
+
+  .input {
+    @apply bg-white border border-blue-400 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5 mt-2.5 font-normal;
+  }
+  .btn-link{
+    @apply text-white bg-gradient-to-r from-[#7d71ff] to-[#8426ffbe] focus:ring-4 focus:outline-none focus:ring-blue-300 font-medium rounded-lg text-sm text-center;
+  }
+  .stage-btn{
+    @apply text-white focus:ring-4 focus:outline-none focus:ring-blue-300 font-medium rounded-lg text-sm px-5 py-2.5 text-center;
+  }
+}
+button:disabled{
+  opacity: 0.75;
+}
+html{
+  background-color: #E7E2FF;
+}
+.flex-center {
+  @apply flex justify-center items-center;
+}
+.bg-purple-70{
+  background-color: #F0EDFF;
+}
+.custom-table th {
+  padding: 10px; /* Adjust padding as needed */
+  white-space: nowrap;
+}
+
+.custom-table{
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.custom-table tr:not(:first-child) th {
+  border-top: 2px solid #fff; /* Add top border to create gap between rows */
+}
+
+.custom-table td {
+  padding: 10px; /* Adjust padding as needed */
+}
+.table-container {
+  position: relative;
+  overflow-x: auto;
+  width: 100%;
+  height: calc(100vh - 150px); /* Adjust the height as needed */
+  overflow-y: auto;
+}
+
+.pagination-container {
+  position: sticky;
+  bottom: 0;
+  background-color: #fff; /* Set background color as needed */
+  z-index: 1; /* Ensure the pagination is above the table */
+  display: flex;
+  justify-content: center;
+  padding: 15px 0; /* Adjust padding as needed */
+}
+
+.pagination {
+  display: flex;
+  list-style-type: none;
+  gap: 5px;
+  margin: 0;
+  padding: 0;
+}
+
+.pagination__item {
+  margin: 0 5px;
+}
+
+.pagination__link {
+  padding: 3px;
+  border: 1px solid #ccc;
+  background-color: #fff;
+  color: #333;
+  text-decoration: none;
+  border-radius: 5px;
+  cursor: pointer;
+  transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+.pagination__link:hover {
+  background-color: #007bff;
+  color: #fff;
+}
+
+.pagination li a{
+  padding: 4px;
+}
+
+.pagination__link--active {
+  background-color: #007bff;
+  color: #fff;
+  gap: 2px;
+}
+.react-time-picker__wrapper {
+  display: flex;
+  align-items: center;
+  width: 100% !important; /* Adjust the width as needed */
+}
+
+.react-time-picker__inputGroup__input {
+  flex: 1;
+  width: 50px !important; /* Ensure the input takes full width within the wrapper */
+  border: 2px solid rgb(246, 191, 88);
+  border-radius: 3px;
+}
+
+.react-time-picker__inputGroup__leadingZero {
+  width: 25px !important; /* Adjust the width of the leading zero if necessary */
+}

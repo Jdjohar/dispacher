@@ -35,7 +35,7 @@ const SafetyForm = ({ isOpen, handleSafetyFormClose, options }) => {
     e.preventDefault();
 
     try {
-      const response = await fetch("http://localhost:10000/api/safetyForm", {
+      const response = await fetch("https://dispacher-nu.vercel.app/api/safetyForm", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

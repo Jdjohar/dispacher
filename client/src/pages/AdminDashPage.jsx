@@ -9,7 +9,7 @@ const AdminDashPage = () => {
 
   const fetchAllUsers = async () => {
     try {
-      const response = await fetch("http://localhost:10000/api/allUsers", {
+      const response = await fetch("https://dispacher-nu.vercel.app/api/allUsers", {
         method: "GET",
         headers: {
           "Content-Type": "application/json",

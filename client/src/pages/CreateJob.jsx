@@ -67,7 +67,7 @@ const CreateJob = () => {
       } else if (selectedOption === "Container Number") {
         formData = { ...formData, containerNumber };
       }
-      const response = await fetch("http://localhost:10000/api/createJob", {
+      const response = await fetch("https://dispacher-nu.vercel.app/api/createJob", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -103,7 +103,7 @@ const CreateJob = () => {
     const fetchOptions = async () => {
       try {
         const response = await fetch(
-          "http://localhost:10000/api/addressOptions",
+          "https://dispacher-nu.vercel.app/api/addressOptions",
           {
             method: "GET",
             headers: {
@@ -129,7 +129,7 @@ const CreateJob = () => {
     const fetchOptions = async () => {
       try {
         const response = await fetch(
-          "http://localhost:10000/api/addressOptions",
+          "https://dispacher-nu.vercel.app/api/addressOptions",
           {
             method: "GET",
             headers: {

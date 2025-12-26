@@ -5,7 +5,7 @@ const CompletedJob = () => {
 
   const getCompleteJobs = async () => {
     try {
-      const response = await fetch("http://localhost:10000/api/jobs/complete", {
+      const response = await fetch("https://dispacher-nu.vercel.app/api/jobs/complete", {
         method: "GET",
         headers: {
           "Content-Type": "application/json",

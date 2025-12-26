@@ -66,7 +66,7 @@ const ExcelJob = () => {
 
   const getAllJobs = async () => {
     try {
-      const response = await fetch("http://localhost:10000/api/jobs/all", {
+      const response = await fetch("https://dispacher-nu.vercel.app/api/jobs/all", {
         method: "GET",
         headers: {
           "Content-Type": "application/json",
@@ -82,7 +82,7 @@ const ExcelJob = () => {
 
   const fetchIds = async() => {
     try {
-      const response = await fetch("http://localhost:10000/api/unassigned", {
+      const response = await fetch("https://dispacher-nu.vercel.app/api/unassigned", {
         method: "GET",
         headers: {
           "Content-Type": "application/json",
@@ -101,7 +101,7 @@ const ExcelJob = () => {
     const selectedId = id[jobId];
 
     try {
-      const response = await fetch('http://localhost:10000/api/updateJob', {
+      const response = await fetch('https://dispacher-nu.vercel.app/api/updateJob', {
       method: 'PUT',
       headers: {
         'Content-Type': 'application/json',

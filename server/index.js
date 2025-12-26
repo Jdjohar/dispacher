@@ -12,17 +12,7 @@ const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 const cors = require('cors');
 const mongoose = require('mongoose');
-app.use(cors({
-  origin: [
-    'https://dispacher-5dsn.vercel.app'
-  ],
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization'],
-  credentials: true
-}));
 
-// VERY IMPORTANT: handle preflight
-app.options('*', cors());
 /************************************************
  * MODELS
  ************************************************/
@@ -36,7 +26,17 @@ const SafetyForm = require('./models/safetyForm');
  ************************************************/
 const app = express();
 const port = process.env.PORT || 10000;
+app.use(cors({
+  origin: [
+    'https://dispacher-5dsn.vercel.app'
+  ],
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+  credentials: true
+}));
 
+// VERY IMPORTANT: handle preflight
+app.options('*', cors());
 /************************************************
  * MIDDLEWARE
  ************************************************/

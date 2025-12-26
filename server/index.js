@@ -12,7 +12,17 @@ const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 const cors = require('cors');
 const mongoose = require('mongoose');
+app.use(cors({
+  origin: [
+    'https://dispacher-5dsn.vercel.app'
+  ],
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+  credentials: true
+}));
 
+// VERY IMPORTANT: handle preflight
+app.options('*', cors());
 /************************************************
  * MODELS
  ************************************************/

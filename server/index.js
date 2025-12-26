@@ -261,6 +261,7 @@ app.post('/api/safetyForm', async (req, res) => {
 /************************************************
  * START SERVER
  ************************************************/
-app.listen(port, () => {
-  console.log(`🚀 Server running on port ${port}`);
-});
+// app.listen(port, () => {
+//   console.log(`🚀 Server running on port ${port}`);
+// });
+module.exports = app;

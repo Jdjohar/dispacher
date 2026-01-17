@@ -1,129 +1,137 @@
-import React, { useState, useEffect } from "react";
+import React, { useEffect, useState } from "react";
 import { useAuth } from "../context/AuthContext";
 
 const ContainerJob = () => {
   const { user } = useAuth();
-  const [completeJob, setCompleteJob] = useState([]);
+  const [completedJobs, setCompletedJobs] = useState([]);
+  const [loading, setLoading] = useState(true);
 
-  const getContainerJob = async (userMainId) => {
+  const API_BASE = import.meta.env.VITE_API_URL || "https://dispacher-nu.vercel.app";
+  const token = localStorage.getItem("token");
+  console.log(user,"user");
+  const getContainerJobs = async (userId) => {
+    setLoading(true);
     try {
-      const response = await fetch(
-        `https://dispacher-nu.vercel.app/api/container-complete-job?userMainId=${userMainId}`,
+      const res = await fetch(
+        `${API_BASE}/api/jobs/user/${userId}/completed`,
         {
-          method: "GET",
           headers: {
-            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
           },
         }
       );
-      const containerJob = await response.json();
-      setCompleteJob(containerJob.jobs);
+
+      if (!res.ok) throw new Error("Failed to fetch jobs");
+
+      const result = await res.json();
+      console.log(result,"res sd");
+      // ✅ SUPPORT BOTH API SHAPES (array or wrapped object)
+      const jobs = Array.isArray(result)
+        ? result
+        : Array.isArray(result?.totaljobs)
+        ? result.totaljobs
+        : [];
+
+      const completed = jobs.filter((job) => job.isCompleted === true);
+      setCompletedJobs(completed);
     } catch (error) {
-      console.log(error);
+      console.error("Container jobs error:", error);
+      setCompletedJobs([]);
+    } finally {
+      setLoading(false);
     }
   };
 
   useEffect(() => {
-    getContainerJob(user.userMainId);
-  }, []);
-  return (
-    <div className="m-5">
-      {completeJob.length !== 0 ? (
-        completeJob.map((job) => (
-          <div
-            key={job._id}
-            style={{ position: "relative" }}
-            className="bg-white p-2 font-semibold rounded-md mt-10"
-          >
-            {job.userMainId ? (
-              <div
-                style={{ position: "absolute" }}
-                className="top-[-31px] left-0 bg-blue-600 my-2 px-2 rounded-t-md font-semibold text-white"
-              >
-                <div>User ID {job.userMainId}</div>
-              </div>
-            ) : (
-              ""
-            )}
-            <div className="grid sm:grid-cols-2 grid-cols-1 px-2 mt-4">
-              <div>
-                <div>Start Date - <span className="font-normal">{job.jobStart}</span></div>
-                <div>
-                  PIN - <span className="font-normal">{job.pin}</span>
-                </div>
-                <div>
-                  Commodity Code -{" "}
-                  <span className="font-normal">{job.commodityCode}</span>
-                </div>
-                <div>
-                  Doors - <span className="font-normal">{job.doors}</span>
-                </div>
-                <div>
-                  Slot - <span className="font-normal">{job.slot}</span>
-                </div>
-                <div>
-                  DG - <span className='font-normal'>{job.dg}</span> 
-                </div>
-                <div>
-                  Container Number - <span className='font-normal'>{job.containerNumber}</span> 
-                </div>
-              </div>
+    if (!user?.userId || !token) {
+      setLoading(false);
+      return;
+    }
 
-              <div>
-                <div>
-                  Uplift Address -{" "}
-                  <span className="font-normal">{job.uplift}</span>
-                </div>
-                <div>
-                  Offload Address -{" "}
-                  <span className="font-normal">{job.offload}</span>
-                </div>
-                <div>
-                  Size - <span className="font-normal">{job.size}ft.</span>
-                </div>
-                <div>
-                  Release - <span className="font-normal">{job.release}</span>
-                </div>
-                <div>
-                  Random - <span className="font-normal">{job.random}</span>
-                </div>
-                <div>
-                  Weight - <span className='font-normal'>{job.weight} kg</span> 
-                  </div>
-              </div>
+    getContainerJobs(user.userId);
+  }, [user?.userId, token]);
+
+  /* ================= RENDER ================= */
+
+  if (loading) {
+    return (
+      <div className="flex justify-center items-center h-64">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600" />
+      </div>
+    );
+  }
+
+  if (!completedJobs.length) {
+    return (
+      <div className="m-6 text-center text-slate-400 font-semibold">
+        No jobs completed yet.
+      </div>
+    );
+  }
+
+  return (
+    <div className="m-5 space-y-10">
+      {completedJobs.map((job) => (
+        <div
+          key={job._id}
+          className="relative bg-white p-4 rounded-2xl shadow-sm border"
+        >
+          {/* Assigned Driver */}
+          {job.assignedTo?.username && (
+            <div className="absolute -top-6 left-0 bg-indigo-600 px-3 py-1 rounded-t-xl text-white text-sm font-bold">
+              Driver: {job.assignedTo.username}
             </div>
-            <div className='px-2 mt-1'>
-                 <span className="font-bold">Special Instructions:</span>
-                  <br/>
-                  <span className='text-lg font-normal'>{job.instructions}</span>
-                 </div>
-            <div className="px-2 mt-2 font-semibold bg-purple-400 rounded-md text-white">
-              <div className="flex items-center justify-center ">Status</div>
-              <div className="flex flex-wrap gap-2">
-                {job.status.map((e) => (
-                  <div key={e.type}>
-                    <span className="capitalize">{e.type}</span> -{" "}
-                    {new Intl.DateTimeFormat("en-US", {
-                      year: "numeric",
-                      month: "2-digit",
-                      day: "2-digit",
-                      hour: "2-digit",
-                      minute: "2-digit",
-                      second: "2-digit",
-                      timeZone: "IST", // Adjust this according to your requirements
-                    })
-                      .format(new Date(e.timestamp))
-                      .replace(/(\d+)\/(\d+)\/(\d+)/, "$3-$1-$2")}
-                    ,
-                  </div>
-                ))}
-              </div>
+          )}
+
+          {/* Job Info */}
+          <div className="grid md:grid-cols-2 gap-6 mt-4 text-sm">
+            <div className="space-y-1">
+              <div>Start Date: <span className="font-normal">{job.jobStart || "-"}</span></div>
+              <div>PIN: <span className="font-normal">{job.pin}</span></div>
+              <div>Commodity Code: <span className="font-normal">{job.commodityCode}</span></div>
+              <div>Slot: <span className="font-normal">{job.slot}</span></div>
+              <div>DG: <span className="font-normal">{job.dg ? "Yes" : "No"}</span></div>
+              <div>Container No: <span className="font-normal">{job.containerNumber || "-"}</span></div>
+            </div>
+
+            <div className="space-y-1">
+              <div>Uplift: <span className="font-normal">{job.uplift}</span></div>
+              <div>Offload: <span className="font-normal">{job.offload}</span></div>
+              <div>Size: <span className="font-normal">{job.size} ft</span></div>
+              <div>Release: <span className="font-normal">{job.release || "-"}</span></div>
+              <div>Random: <span className="font-normal">{job.random || "-"}</span></div>
+              <div>Weight: <span className="font-normal">{job.weight} kg</span></div>
             </div>
           </div>
-        ))
-      ) : (
-        <div className="items-center">No Job Completed Yet.</div>
-      )}
+
+          {/* Instructions */}
+          {job.instructions && (
+            <div className="mt-4 text-sm">
+              <span className="font-bold">Special Instructions:</span>
+              <p className="font-normal">{job.instructions}</p>
+            </div>
+          )}
+
+          {/* Status Timeline */}
+          <div className="mt-4 bg-indigo-500 text-white rounded-xl p-3 text-sm">
+            <div className="font-bold text-center mb-2">Status Timeline</div>
+            <div className="flex flex-wrap gap-3">
+              {job.status?.length ? (
+                job.status.map((s, idx) => (
+                  <div key={idx} className="capitalize">
+                    {s.stage} —{" "}
+                    {s.timestamp
+                      ? new Date(s.timestamp).toLocaleString()
+                      : "-"}
+                  </div>
+                ))
+              ) : (
+                <div>No status updates</div>
+              )}
+            </div>
+          </div>
+        </div>
+      ))}
     </div>
   );
 };

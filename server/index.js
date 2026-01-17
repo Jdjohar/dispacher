@@ -1,5 +1,5 @@
 /************************************************
- * LOAD ENV FIRST
+ * LOAD ENV
  ************************************************/
 require('dotenv').config();
 
@@ -7,7 +7,6 @@ require('dotenv').config();
  * IMPORTS
  ************************************************/
 const express = require('express');
-const bodyParser = require('body-parser');
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 const cors = require('cors');
@@ -16,262 +15,388 @@ const mongoose = require('mongoose');
 /************************************************
  * MODELS
  ************************************************/
-const User = require('./models/usersModel');
+const User = require('./models/usersModel.js');
 const Address = require('./models/address');
 const Job = require('./models/jobModel');
 const SafetyForm = require('./models/safetyForm');
-
+const crypto = require("crypto");
 /************************************************
  * APP INIT
  ************************************************/
 const app = express();
-const port = process.env.PORT || 10000;
-app.use(cors({
-  origin: [
-    'https://dispacher-5dsn.vercel.app'
-  ],
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization'],
-  credentials: true
-}));
+const PORT = process.env.PORT || 10000;
 
-// VERY IMPORTANT: handle preflight
-app.options('*', cors());
 /************************************************
  * MIDDLEWARE
  ************************************************/
-app.use(cors());
-app.use(bodyParser.json());
+app.use(cors({
+  origin: [
+    'http://localhost:5173',
+    'https://dispacher-5dsn.vercel.app'
+  ],
+  credentials: true
+}));
+app.use(express.json());
 
 /************************************************
- * MONGODB CONNECTION (ONCE ONLY)
+ * DATABASE
  ************************************************/
-mongoose
-  .connect(process.env.MONGODB_URL)
-  .then(() => console.log('✅ MongoDB connected successfully'))
-  .catch((err) => {
-    console.error('❌ MongoDB connection failed:', err);
+mongoose.connect(process.env.MONGODB_URL)
+  .then(() => console.log('✅ MongoDB connected'))
+  .catch(err => {
+    console.error('❌ MongoDB error', err);
     process.exit(1);
   });
 
-mongoose.connection.on('error', (err) => {
-  console.error('❌ MongoDB runtime error:', err);
+/************************************************
+ * AUTH MIDDLEWARE
+ ************************************************/
+const auth = (req, res, next) => {
+  const token = req.headers.authorization?.split(' ')[1];
+  if (!token) return res.status(401).json({ message: 'No token' });
+
+  try {
+    req.user = jwt.verify(token, process.env.SECRET_KEY);
+    next();
+  } catch {
+    res.status(401).json({ message: 'Invalid token' });
+  }
+};
+
+const role = (roles) => (req, res, next) => {
+  if (!roles.includes(req.user.userType)) {
+    return res.status(403).json({ message: 'Access denied' });
+  }
+  next();
+};
+
+/************************************************
+ * HEALTH
+ ************************************************/
+app.get('/', (req, res) => {
+  res.send('Backend running');
+});
+
+app.get('/api/health', (req, res) => {
+  res.json({ status: 'OK', time: new Date() });
 });
 
 /************************************************
- * ROUTES
+ * AUTH ROUTES
  ************************************************/
+app.post('/api/auth/login', async (req, res) => {
+  const { username, password } = req.body;
 
-app.get('/', (req, res) => {
-  res.send('Hello, your backend is working!');
-});
-app.get('/api/users/usernames', async (req, res) => {
-  try {
-    // Fetch only username field, exclude _id
-    const users = await User.find({}, { username: 1, _id: 0 });
-    console.log(users);
-    res.json({
-      success: true,
-      usernames: users.map((user) => user.username),
-    });
-  } catch (err) {
-    res.status(500).json({
-      success: false,
-      error: err.message,
-    });
-  }
-});
+  const user = await User.findOne({ username });
+  if (!user) return res.status(404).json({ message: 'User not found' });
 
-app.get('/api/users/debug', async (req, res) => {
-  const users = await User.find({});
-  res.json(users);
-});
-/* =========================
-   USER LOGIN
-========================= */
-app.post('/api/userlogin', async (req, res) => {
-  try {
-    const { username, password } = req.body;
-    console.log('Login attempt for user:', username);  
-    const user = await User.findOne({ username });
-    if (!user) return res.status(404).json({ message: 'User not found' });
+  const match = await bcrypt.compare(password, user.password);
+  if (!match) return res.status(401).json({ message: 'Invalid password' });
 
-    const isPasswordValid = await bcrypt.compare(password, user.password);
-    if (!isPasswordValid)
-      return res.status(401).json({ message: 'Invalid password' });
+  const token = jwt.sign(
+    { userId: user._id, userType: user.userType },
+    process.env.SECRET_KEY,
+    { expiresIn: '7d' }
+  );
 
-    const token = jwt.sign(
-      { userId: user._id, userType: user.userType },
-      process.env.SECRET_KEY,
-      { expiresIn: '7d' }
-    );
-
-    res.json({
-      token,
-      user: {
-        userId: user._id,
-        username: user.username,
-        email: user.email,
-        userType: user.userType,
-        userMainId: user.userMainId || null,
-      },
-    });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: 'Internal Server Error' });
-  }
-});
-
-/* =========================
-   GET AUTH USER
-========================= */
-app.get('/api/user', async (req, res) => {
-  try {
-    const token = req.headers.authorization?.replace('Bearer ', '');
-    if (!token) return res.status(401).json({ message: 'Unauthorized' });
-
-    const decoded = jwt.verify(token, process.env.SECRET_KEY);
-    const user = await User.findById(decoded.userId);
-
-    if (!user) return res.status(404).json({ message: 'User not found' });
-
-    res.json({
+  res.json({
+    token,
+    user: {
       userId: user._id,
       username: user.username,
       email: user.email,
       userType: user.userType,
-      userMainId: user.userMainId || null,
-    });
-  } catch (err) {
-    res.status(401).json({ message: 'Invalid token' });
-  }
-});
-
-/* =========================
-   CREATE USER
-========================= */
-app.post('/api/saveUser', async (req, res) => {
-  try {
-    const { username, email, password, userMainId, userType } = req.body;
-
-    if (await User.findOne({ username })) {
-      return res.json({ code: 'user', message: 'Username already exists' });
+      userMainId: user.userMainId || null
     }
-
-    if (userMainId && (await User.findOne({ userMainId }))) {
-      return res.json({ code: 'ID', message: 'UserMainId already exists' });
-    }
-
-    const hashedPassword = await bcrypt.hash(password, 10);
-
-    await new User({
-      username,
-      email,
-      password: hashedPassword,
-      userType,
-      userMainId,
-    }).save();
-
-    res.json({ success: true, message: 'User saved successfully' });
-  } catch (err) {
-    res.status(500).json({ success: false, error: err.message });
-  }
+  });
 });
 
-/* =========================
-   ADDRESS
-========================= */
-app.post('/api/saveAddress', async (req, res) => {
+app.post('/api/auth/logout', auth, (req, res) => {
+  res.json({ success: true });
+});
+
+app.get('/api/auth/me', auth, async (req, res) => {
+  const user = await User.findById(req.user.userId).select('-password');
+  res.json(user);
+});
+
+app.put('/api/auth/change-password', auth, async (req, res) => {
+  const { oldPassword, newPassword } = req.body;
+
+  const user = await User.findById(req.user.userId);
+  const match = await bcrypt.compare(oldPassword, user.password);
+  if (!match) return res.status(400).json({ message: 'Wrong old password' });
+
+  user.password = await bcrypt.hash(newPassword, 10);
+  await user.save();
+
+  res.json({ success: true });
+});
+
+/************************************************
+ * USER ROUTES (ADMIN)
+ ************************************************/
+app.post('/api/users', auth, role(['admin']), async (req, res) => {
+  const { username, email, password, userType, userMainId } = req.body;
+
+  const hashed = await bcrypt.hash(password, 10);
+  const user = await User.create({
+    username,
+    email,
+    password: hashed,
+    userType,
+    userMainId
+  });
+
+  res.json(user);
+});
+
+app.get('/api/users', auth, role(['admin']), async (req, res) => {
+  res.json(await User.find().select('-password'));
+});
+
+app.get('/api/users/:id', auth, role(['admin']), async (req, res) => {
+  res.json(await User.findById(req.params.id).select('-password'));
+});
+
+app.get('/api/users/role/:role', auth, role(['admin', 'dispatcher']), async (req, res) => {
+  res.json(
+    await User.find({ userType: req.params.role }).select('-password')
+  );
+});
+app.get('/api/jobs/user/:userId/completed', auth, async (req, res) => {
+  const { userId } = req.params;
+
+  // validate ObjectId
+  if (!mongoose.Types.ObjectId.isValid(userId)) {
+    return res.status(400).json({ message: 'Invalid userId' });
+  }
+
   try {
-    await new Address(req.body).save();
-    res.json({ success: true, message: 'Address saved' });
+    const jobs = await Job.find({
+      assignedTo: userId,
+      isCompleted: true,
+    }).populate('assignedTo', 'username userType');
+
+    res.json(jobs);
   } catch (err) {
-    res.status(500).json({ success: false, error: err.message });
+    console.error('Completed jobs fetch error:', err);
+    res.status(500).json({ message: 'Server error' });
   }
 });
-
-app.get('/api/addressOptions', async (req, res) => {
-  res.json({ addresses: await Address.find() });
+app.put('/api/users/:id', auth, role(['admin']), async (req, res) => {
+  res.json(await User.findByIdAndUpdate(req.params.id, req.body, { new: true }));
 });
 
-/* =========================
-   JOBS
-========================= */
-app.post('/api/createJob', async (req, res) => {
-  try {
-    await new Job({ ...req.body, complete: 'no' }).save();
-    res.json({ success: true, message: 'Job created' });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
+app.delete('/api/users/:id', auth, role(['admin']), async (req, res) => {
+  await User.findByIdAndDelete(req.params.id);
+  res.json({ success: true });
 });
 
-app.get('/api/allJobs', async (req, res) => {
-  res.json({ jobs: await Job.find({ complete: 'no' }) });
+/************************************************
+ * ADDRESS ROUTES
+ ************************************************/
+app.post('/api/addresses', auth, role(['admin', 'dispatcher']), async (req, res) => {
+  res.json(await Address.create(req.body));
 });
 
-app.put('/api/updateJob', async (req, res) => {
-  const { selectedId, jobId } = req.body;
-  const job = await Job.findByIdAndUpdate(jobId, { userMainId: selectedId }, { new: true });
-  if (!job) return res.status(404).json({ error: 'Job not found' });
+app.get('/api/addresses', auth, async (req, res) => {
+  res.json(await Address.find());
+});
+
+app.put('/api/addresses/:id', auth, async (req, res) => {
+  res.json(await Address.findByIdAndUpdate(req.params.id, req.body, { new: true }));
+});
+
+app.delete('/api/addresses/:id', auth, async (req, res) => {
+  await Address.findByIdAndDelete(req.params.id);
+  res.json({ success: true });
+});
+
+/************************************************
+ * JOB ROUTES
+ ************************************************/
+app.post('/api/jobs', auth, async (req, res) => {
+  const job = await Job.create({
+    ...req.body,
+    jobNumber:
+    req.body.jobNumber ||
+    `JOB-${Date.now()}-${crypto.randomInt(100, 999)}`,
+    isCompleted: false,
+    status: [{ stage: 'accept' }]
+  });
   res.json(job);
 });
 
-app.put('/api/updateStatus', async (req, res) => {
-  const { jobId, jobStage } = req.body;
 
-  if (!['accept', 'uplift', 'offload', 'done'].includes(jobStage)) {
-    return res.status(400).json({ error: 'Invalid stage' });
+app.get('/api/jobs', auth, async (req, res) => {
+  const jobs = await Job.find({ isCompleted: false })
+    .populate('assignedTo', 'username userType');
+  res.json(jobs);
+});
+
+app.get('/api/jobs/unassigned', auth, async (req, res) => {
+  res.json(await Job.find({ assignedTo: null, isCompleted: false }));
+});
+
+app.get('/api/jobs/completed', auth, async (req, res) => {
+  const jobs = await Job.find({ isCompleted: true })
+    .populate('assignedTo', 'username userType userMainId');
+
+  res.json(jobs);
+});
+app.get('/api/jobs/:id', auth, async (req, res) => {
+  res.json(await Job.findById(req.params.id));
+});
+
+app.get('/api/jobs/user/:userId', auth, async (req, res) => {
+  const { userId } = req.params;
+  console.log("User Id", userId);
+  
+
+  if (!mongoose.Types.ObjectId.isValid(userId)) {
+    return res.status(400).json({ message: "Invalid userId" });
+  }
+
+  const jobs = await Job.find({
+    assignedTo: userId,
+    isCompleted: false
+  }).populate('assignedTo', 'username userType');
+
+  res.json(jobs);
+});
+
+app.put('/api/jobs/:id', auth, role(['admin', 'dispatcher']), async (req, res) => {
+  res.json(await Job.findByIdAndUpdate(req.params.id, req.body, { new: true }));
+});
+
+app.put('/api/jobs/:id/assign', auth, role(['admin', 'dispatcher']), async (req, res) => {
+  const { userId } = req.body;
+
+  if (!userId) {
+    return res.status(400).json({ message: 'User ID required' });
   }
 
   const job = await Job.findByIdAndUpdate(
-    jobId,
-    {
-      $push: { status: { type: jobStage } },
-      complete: jobStage === 'done' ? 'yes' : 'no',
-    },
+    req.params.id,
+    { assignedTo: userId },
     { new: true }
-  );
+  ).populate('assignedTo', 'username userType');
 
-  res.json({ success: true, job });
+
+  console.log(job,"Job");
+  
+  res.json(job);
 });
-app.get('/create-admin-once', async (req, res) => {
-  try {
-    const existing = await User.findOne({ username: 'admin' });
-    if (existing) {
-      return res.send('Admin already exists');
-    }
 
-    const hashedPassword = await bcrypt.hash('Admin@123', 10);
+app.put('/api/jobs/:id/status', auth, async (req, res) => {
+  const { stage } = req.body;
 
-    await new User({
-      username: 'admin',
-      email: 'admin@test.com',
-      password: hashedPassword,
-      userType: 'admin',
-    }).save();
-
-    res.send('✅ Admin user created');
-  } catch (err) {
-    res.status(500).send(err.message);
+  if (!['accept', 'uplift', 'offload', 'done'].includes(stage)) {
+    return res.status(400).json({ message: 'Invalid stage' });
   }
+
+  const job = await Job.findById(req.params.id);
+
+  job.status.push({ stage });
+
+  if (stage === 'done') job.isCompleted = true;
+
+  await job.save();
+  res.json(job);
 });
-/* =========================
-   SAFETY FORM
-========================= */
-app.post('/api/safetyForm', async (req, res) => {
+
+
+app.get('/api/jobs/:id/status', auth, async (req, res) => {
+  const job = await Job.findById(req.params.id, 'status');
+  res.json(job.status);
+});
+
+app.delete('/api/jobs/:id', auth, role(['admin']), async (req, res) => {
+  await Job.findByIdAndDelete(req.params.id);
+  res.json({ success: true });
+});
+
+/************************************************
+ * SAFETY FORM ROUTES
+ ************************************************/
+app.post('/api/safetyForms', auth, async (req, res) => {
+  res.json(await SafetyForm.create(req.body));
+});
+
+app.get('/api/safetyForms', auth, role(['admin']), async (req, res) => {
+  res.json(await SafetyForm.find());
+});
+
+app.get('/api/safetyForms/:id', auth, role(['admin']), async (req, res) => {
+  res.json(await SafetyForm.findById(req.params.id));
+});
+
+app.get('/api/safetyForms/job/:jobNumber', auth, async (req, res) => {
+  res.json(await SafetyForm.find({ jobNumber: req.params.jobNumber }));
+});
+
+/************************************************
+ * REPORT ROUTES
+ ************************************************/
+app.get('/api/reports/jobs', auth, role(['admin', 'dispatcher']), async (req, res) => {
+  const { from, to } = req.query;
+
+  const start = new Date(from);
+  start.setHours(0, 0, 0, 0);
+
+  const end = new Date(to);
+  end.setHours(23, 59, 59, 999);
+
+  const jobs = await Job.find({
+    isCompleted: true,
+    updatedAt: { $gte: start, $lte: end }
+  }).populate('assignedTo', 'username');
+
+  res.json(jobs);
+});
+
+app.get('/api/reports/today', auth, role(['admin', 'dispatcher']), async (req, res) => {
+  const start = new Date();
+  start.setHours(0,0,0,0);
+  res.json(await Job.find({ createdAt: { $gte: start } }));
+});
+
+app.get('/api/reports/summary', auth, role(['admin', 'dispatcher']), async (req, res) => {
+  const total = await Job.countDocuments();
+  const completed = await Job.countDocuments({ isCompleted: true });
+  res.json({ total, completed });
+});
+
+app.get('/api/reports/jobs/date/:date', auth, role(['admin', 'dispatcher']), async (req, res) => {
+  const { date } = req.params;
+
+  // start of day
+  const start = new Date(date);
+  start.setHours(0, 0, 0, 0);
+
+  // end of day
+  const end = new Date(date);
+  end.setHours(23, 59, 59, 999);
+
   try {
-    await new SafetyForm(req.body).save();
-    res.json({ success: true });
+    const jobs = await Job.find({
+      isCompleted: true,
+      updatedAt: { $gte: start, $lte: end }
+    }).populate('assignedTo', 'username');
+
+    res.json(jobs);
   } catch (err) {
-    res.status(500).json({ success: false });
+    console.error('Single date report error:', err);
+    res.status(500).json({ message: 'Server error' });
   }
 });
 
 /************************************************
  * START SERVER
  ************************************************/
-// app.listen(port, () => {
-//   console.log(`🚀 Server running on port ${port}`);
+// app.listen(PORT, () => {
+//   console.log(`🚀 Server running on port ${PORT}`);
 // });
+
 module.exports = app;

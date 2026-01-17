@@ -1,72 +1,108 @@
-import React, {useEffect} from 'react';
-import { Routes, Route, Navigate} from 'react-router-dom'
-import HomePage from './pages/HomePage'
-import AdminDashPage from './pages/AdminDashPage';
-import DispatcherDashPage from './pages/DispatcherDashPage';
-import ContainerDashPage from './pages/ContainerDashPage';
-import { useAuth } from './context/AuthContext';
-import AdminUser from './pages/AdminUser';
-import AdminAddress from './pages/AdminAddress';
-import CreateJob from './pages/CreateJob';
-import CompletedJob from './pages/CompletedJob';
-import ContainerJob from './pages/ContainerJob';
-import NewJob from './pages/NewJob';
-import ExcelJob from './pages/ExcelJob';
-import ReportSection from './pages/ReportSection';
+import React, { useEffect } from "react";
+import { Routes, Route, Navigate, Outlet } from "react-router-dom";
+import { useAuth } from "./context/AuthContext";
+
+import Layout from "./layout/layout";
+
+// Pages
+import HomePage from "./pages/HomePage";
+
+// Admin
+import AdminDashPage from "./pages/AdminDashPage";
+import AdminUser from "./pages/AdminUser";
+import AdminAddress from "./pages/AdminAddress";
+import CreateJob from "./pages/CreateJob";
+import ExcelJob from "./pages/ExcelJob";
+import ReportSection from "./pages/ReportSection";
+
+// Dispatcher
+import DispatcherDashPage from "./pages/DispatcherDashPage";
+import CompletedJob from "./pages/CompletedJob";
+
+// Container
+import ContainerDashPage from "./pages/ContainerDashPage";
+import NewJob from "./pages/NewJob";
+import ContainerJob from "./pages/ContainerJob";
+
+/* 🔐 Role Guard */
+const PrivateRoute = ({ role }) => {
+  const { isLoggedIn, user } = useAuth();
+
+  if (!isLoggedIn()) return <Navigate to="/" replace />;
+  if (user?.userType !== role) return <Navigate to="/" replace />;
+
+  return <Outlet />;
+};
 
 function App() {
-  const { isLoggedIn, user, setUser} = useAuth();
+  const { setUser } = useAuth();
 
   useEffect(() => {
-    const userDataString = localStorage.getItem('userInfo');
+    const userDataString = localStorage.getItem("userInfo");
     if (userDataString) {
-      const userData = JSON.parse(userDataString);
-      setUser(userData);
+      setUser(JSON.parse(userDataString));
     }
   }, [setUser]);
 
-  function PrivateRoute({ userType, element }) {
-    if (!isLoggedIn()) {
-      return <Navigate to="/" />;
-    }
-    if (isLoggedIn() && user?.userType !== userType) {
-      return <Navigate to="/" />
-    }
-  
-    return element
-  }
-
   return (
-   <Routes>
-    <Route index path='/' element={<HomePage/>}/>
-    <Route
-      path="/admin-dashboard"
-      element={<PrivateRoute element={<AdminDashPage />} userType="admin" />}
-    >
-      <Route path='users' element={<AdminUser />}/>
-      <Route path='address' element={<AdminAddress/>}/>
-      <Route path='add-job' element={<CreateJob/>}/>
-      <Route path='listed-job' element={<ExcelJob/>}/>
-      <Route path='report-section' element={<ReportSection/>}/>
-    </Route>
-    <Route
-      path="/dispatcher-dashboard"
-      element={<PrivateRoute element={<DispatcherDashPage />} userType="dispatcher" />}
-    >
-      <Route path='create-job' element={<CreateJob />}/>
-      <Route path='job-lists' element={<ExcelJob />}/>
-      <Route path='completed-job' element={<CompletedJob/>}/>
-      <Route path='report-section' element={<ReportSection/>}/>
-    </Route> 
-    <Route
-      path="/container-dashboard"
-      element={<PrivateRoute element={<ContainerDashPage />} userType="container" />}
-    >
-      <Route path='new-job' element={<NewJob />}/>
-      <Route path='finished-job' element={<ContainerJob />}/>
+    <Routes>
+      {/* PUBLIC */}
+      <Route path="/" element={<HomePage />} />
+
+      {/* ADMIN */}
+      <Route element={<PrivateRoute role="admin" />}>
+        <Route
+          path="/admin-dashboard/*"
+          element={
+            <Layout role="admin">
+              <Outlet />
+            </Layout>
+          }
+        >
+          <Route index element={<AdminDashPage />} />
+          <Route path="users" element={<AdminUser />} />
+          <Route path="address" element={<AdminAddress />} />
+          <Route path="add-job" element={<CreateJob />} />
+          <Route path="listed-job" element={<ExcelJob />} />
+          <Route path="report-section" element={<ReportSection />} />
+        </Route>
       </Route>
-   </Routes>
-  )
+
+      {/* DISPATCHER */}
+      <Route element={<PrivateRoute role="dispatcher" />}>
+        <Route
+          path="/dispatcher-dashboard/*"
+          element={
+            <Layout role="dispatcher">
+              <Outlet />
+            </Layout>
+          }
+        >
+          <Route index element={<DispatcherDashPage />} />
+          <Route path="create-job" element={<CreateJob />} />
+          <Route path="job-lists" element={<ExcelJob />} />
+          <Route path="completed-job" element={<CompletedJob />} />
+          <Route path="report-section" element={<ReportSection />} />
+        </Route>
+      </Route>
+
+      {/* CONTAINER */}
+      <Route element={<PrivateRoute role="container" />}>
+        <Route
+          path="/container-dashboard/*"
+          element={
+            <Layout role="container">
+              <Outlet />
+            </Layout>
+          }
+        >
+          <Route index element={<ContainerDashPage />} />
+          <Route path="new-job" element={<NewJob />} />
+          <Route path="finished-job" element={<ContainerJob />} />
+        </Route>
+      </Route>
+    </Routes>
+  );
 }
 
 export default App;

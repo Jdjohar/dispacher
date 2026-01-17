@@ -23,9 +23,9 @@ const Sidebar = () => {
 
   return (
     <div>
-      <button onClick={toggleSidebar} className='bg-black p-1 left-0 rounded-r-lg'>
+      {/* <button onClick={toggleSidebar} className='bg-black p-1 left-0 rounded-r-lg'>
       <img src={open} alt="open" className='bg-black rounded-md w-[35px] h-[35px]' />
-      </button>
+      </button> */}
       
      <div style={{position: 'fixed', top: '0', left: '0', zIndex: '100'}} className={`bg-white transition-transform duration-300 min-h-full ${isSidebarOpen ? 'translate-x-[0]' : 'translate-x-[-100%]'} min-w-[200px]`}>
       <div>

@@ -1,15 +1,20 @@
 const mongoose = require('mongoose');
 
-const SafetyFormSchema = new mongoose.Schema({
+const SafetyFormSchema = new mongoose.Schema(
+  {
+    jobId: { type: mongoose.Schema.Types.ObjectId, ref: 'Job', required: true },
+    userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
     firstName: String,
     surname: String,
     addressSite: String,
-    jobNumber: { type: String, default: '' }, 
     fitForDuty: String,
     mealBreak: String,
     PPE: String,
-    message: { type: String, default: '' }, 
-  });
+    message: String,
+  },
+  { timestamps: true }
+);
+
   
   
 const SafetyForm = mongoose.model('SafetyForm', SafetyFormSchema);

@@ -1,25 +1,93 @@
-import React, { useState, useEffect } from "react";
+import React, { useEffect, useState } from "react";
 import { Outlet, useLocation } from "react-router-dom";
 import Sidebar from "../components/Sidebar";
 
+/* ===== Helper Components ===== */
+
+const StatCard = ({ title, value }) => (
+  <div className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm flex items-center gap-6">
+    <div className="w-14 h-14 bg-indigo-100 text-indigo-600 rounded-2xl flex items-center justify-center font-bold text-xl">
+      {value}
+    </div>
+    <div>
+      <p className="text-sm font-semibold text-slate-500 uppercase">{title}</p>
+      <p className="text-3xl font-bold text-slate-900">{value}</p>
+    </div>
+  </div>
+);
+
+const TabButton = ({ active, children, onClick }) => (
+  <button
+    onClick={onClick}
+    className={`px-6 py-2 rounded-xl text-sm font-bold transition-all ${
+      active
+        ? "bg-white text-indigo-600 shadow-sm"
+        : "text-slate-500 hover:text-slate-700"
+    }`}
+  >
+    {children}
+  </button>
+);
+
+const UserCard = ({ user }) => (
+  <div className="group bg-slate-50 p-6 rounded-3xl hover:bg-white hover:shadow-xl transition-all border hover:border-indigo-100">
+    <div className="flex justify-between mb-4">
+      <div className="w-12 h-12 rounded-2xl bg-white flex items-center justify-center text-xl font-bold text-indigo-600 group-hover:bg-indigo-600 group-hover:text-white transition">
+        {user.username?.charAt(0).toUpperCase()}
+      </div>
+      <span className="px-3 py-1 bg-indigo-100 text-indigo-700 text-[10px] font-bold uppercase rounded-full">
+        {user.userType}
+      </span>
+    </div>
+
+    <h4 className="font-bold text-slate-800 text-lg">{user.username}</h4>
+    <p className="text-sm text-slate-500">{user.email}</p>
+
+    {user.userMainId && (
+      <p className="mt-2 text-xs font-bold text-slate-400 bg-white px-3 py-1 rounded-lg inline-block border">
+        ID: {user.userMainId}
+      </p>
+    )}
+  </div>
+);
+
+const EmptyState = () => (
+  <div className="col-span-full py-16 text-center text-slate-400">
+    No users found in this category.
+  </div>
+);
+
+/* ===== Main Component ===== */
+
 const AdminDashPage = () => {
-  const [users, setUsers] = useState([]);
   const { pathname } = useLocation();
+
+  const [users, setUsers] = useState([]);
   const [selectedTab, setSelectedTab] = useState("container");
+  const [isLoading, setIsLoading] = useState(true);
+
+  const API_BASE = import.meta.env.VITE_API_URL || "https://dispacher-nu.vercel.app";
 
   const fetchAllUsers = async () => {
     try {
-      const response = await fetch("https://dispacher-nu.vercel.app/api/allUsers", {
-        method: "GET",
+      const token = localStorage.getItem("token");
+
+      const res = await fetch(`${API_BASE}/api/users`, {
         headers: {
-          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
         },
       });
-      const allUsers = await response.json();
-      console.log(allUsers.users);
-      setUsers(allUsers.users);
-    } catch (error) {
-      console.log(error);
+
+      if (!res.ok) {
+        throw new Error("Failed to fetch users");
+      }
+
+      const data = await res.json();
+      setUsers(data); // ✅ backend returns array directly
+    } catch (err) {
+      console.error("Fetch users error:", err);
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -27,82 +95,74 @@ const AdminDashPage = () => {
     fetchAllUsers();
   }, []);
 
-  useEffect(() => {
-    if (pathname !== '/admin-dashboard') {
-      setSelectedTab("");
-    }
-     // Reset selectedTab to empty string when URL changes
-  }, [pathname]);
+  if (pathname !== "/admin-dashboard") {
+    return (
+      <div className="flex">
+        <Sidebar />
+        <div className="flex-1 p-6">
+          <Outlet />
+        </div>
+      </div>
+    );
+  }
 
-  const handleTabChange = (tab) => {
-    setSelectedTab(tab);
-  };
+  const containerUsers = users.filter((u) => u.userType === "container");
+  const dispatcherUsers = users.filter((u) => u.userType === "dispatcher");
 
   return (
-    <div>
-      <div className="flex justify-between items-center">
-        <Sidebar />
+    <div className="flex">
+      <Sidebar />
+
+      <div className="flex-1 p-8 space-y-10 bg-slate-50 min-h-screen">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <StatCard title="Total Users" value={users.length} />
+          <StatCard title="Drivers" value={containerUsers.length} />
+          <StatCard title="Dispatchers" value={dispatcherUsers.length} />
+        </div>
+
+        <div className="bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden">
+          <div className="p-6 border-b flex justify-between">
+            <h2 className="text-xl font-bold">User Management</h2>
+
+            <div className="flex bg-slate-100 p-1 rounded-2xl">
+              <TabButton
+                active={selectedTab === "container"}
+                onClick={() => setSelectedTab("container")}
+              >
+                Drivers
+              </TabButton>
+              <TabButton
+                active={selectedTab === "dispatcher"}
+                onClick={() => setSelectedTab("dispatcher")}
+              >
+                Dispatchers
+              </TabButton>
+            </div>
+          </div>
+
+          <div className="p-6">
+            {isLoading ? (
+              <div className="flex justify-center py-16">
+                <div className="h-12 w-12 animate-spin rounded-full border-b-2 border-indigo-600" />
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {(selectedTab === "container"
+                  ? containerUsers
+                  : dispatcherUsers
+                ).map((user) => (
+                  <UserCard key={user._id} user={user} />
+                ))}
+
+                {(selectedTab === "container"
+                  ? containerUsers
+                  : dispatcherUsers
+                ).length === 0 && <EmptyState />}
+              </div>
+            )}
+          </div>
+        </div>
       </div>
-      {pathname !== "/admin-dashboard" ? (
-        <Outlet />
-      ) : (
-        <div className="flex justify-center items-center mt-8">
-          <button
-            className={`px-4 py-2 mr-4 rounded-tl-lg font-semibold rounded-bl-lg focus:outline-none ${
-              selectedTab === "container"
-                ? "bg-blue-500 text-white"
-                : "bg-white text-gray-700"
-            }`}
-            onClick={() => handleTabChange("container")}
-          >
-            Container (
-            {users.filter((user) => user.userType === "container").length})
-          </button>
-          <button
-            className={`px-4 py-2 mr-4 font-semibold rounded-tr-lg rounded-br-lg focus:outline-none ${
-              selectedTab === "dispatcher"
-                ? "bg-blue-500 text-white"
-                : "bg-white text-gray-700"
-            }`}
-            onClick={() => handleTabChange("dispatcher")}
-          >
-            Dispatcher (
-            {users.filter((user) => user.userType === "dispatcher").length})
-          </button>
-        </div>
-      )}
-      {/* Conditionally render based on the selected tab */}
-      {selectedTab === "container" && (
-        <div className="container-tab m-5 p-2 bg-white rounded-md">
-          {users.map((user) => {
-            if (user.userType === "container") {
-              return (
-                <div key={user._id} className="bg-purple-70 m-2 p-2 rounded-md">
-                <span>UserName - {user.username}</span> <br/>
-                <span>UserID - {user.userMainId}</span> <br/>
-                <span>Email - {user.email}</span>
-                </div>
-              );
-            }
-            return null;
-          })}
-        </div>
-      )}
-      {selectedTab === "dispatcher" && (
-        <div className="dispatcher-tab m-5 p-2 bg-white rounded-md">
-          {users.map((user) => {
-            if (user.userType === "dispatcher") {
-              return (
-                <div key={user._id} className="bg-purple-70 m-2 p-2 rounded-md">
-                <span>UserName - {user.username}</span> <br/>
-                <span>Email - {user.email}</span>
-                </div>
-              );
-            }
-            return null;
-          })}
-        </div>
-      )}
     </div>
   );
 };

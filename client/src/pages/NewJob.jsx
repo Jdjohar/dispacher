@@ -1,225 +1,283 @@
-import React, {useState, useEffect} from 'react'
-import { useAuth } from '../context/AuthContext';
-import SafetyForm from '../components/SafetyForm';
+import React, { useState, useEffect } from "react";
+import { useAuth } from "../context/AuthContext";
+import SafetyForm from "../components/SafetyForm";
 
+const API_BASE = import.meta.env.VITE_API_URL || "https://dispacher-nu.vercel.app";
 
 const NewJob = () => {
+  const { user } = useAuth();
+  const token = localStorage.getItem("token");
+console.log(typeof user,"sdds");
+
+
   const [jobs, setJobs] = useState([]);
-  const [isOpen, setIsOpen] = useState(false);
-  const {user} = useAuth();
-  const [options, setOptions] = useState([]);
+  const [addresses, setAddresses] = useState([]);
+  const [isSafetyOpen, setIsSafetyOpen] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
 
-  const handleAccept = async(jobId, jobStage) => {
+  
+
+
+  /* ================= FETCH JOBS ================= */
+  const fetchJobs = async (userId) => {
+    console.log(userId,"userMainId");
+    
     try {
-      const response = await fetch('https://dispacher-nu.vercel.app/api/updateStatus', {
-        method: 'PUT',
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          jobId,
-          jobStage
-        }),
-      });
-      const data = await response.json();
-      console.log(data);
-      const updatedJobs = jobs.map((job) =>
-        job._id === jobId ? { ...job, status: [...job.status, { type: jobStage, timestamp: new Date() }] } : job
+      const res = await fetch(
+        `${API_BASE}/api/jobs/user/${userId}`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
       );
-      console.log(updatedJobs);
-      setJobs(updatedJobs);
-      fetchJob(user.userMainId);
-    } catch (error) {
-      console.log(error);
+
+      console.log(res,"res");
+      
+
+      if (!res.ok) throw new Error("Failed to fetch jobs");
+
+      const data = await res.json();
+
+      console.log(data, "sdsdsdsd");
+      
+      setJobs(Array.isArray(data) ? data : []);
+    } catch (err) {
+      console.error("Fetch jobs error:", err);
+      setJobs([]);
+    } finally {
+      setIsLoading(false);
     }
-   }
-
-
-  const fetchJob = async (userMainId) => {
-    try {
-      const response = await fetch(`https://dispacher-nu.vercel.app/api/container-job?userMainId=${userMainId}`, {
-        method: "GET",
-        headers: {
-          "Content-Type": "application/json",
-        },
-      });
-      const containerJob = await response.json();
-      console.log(containerJob);
-      setJobs(containerJob.jobs)
-    } catch (error) {
-      console.log(error);
-    }
-  }
-
-
-  const handleSafetyFormClose = () => {
-    // Update the last filled date in localStorage when the safety form is filled
-    localStorage.setItem('lastFilledDate', new Date().toISOString().slice(0, 10));
-    setIsOpen(false);
   };
 
-  useEffect(()=>{
-    fetchJob(user.userMainId);
-    const fetchOptions = async () => {
-      try {
-        const response = await fetch(
-          "https://dispacher-nu.vercel.app/api/addressOptions",
-          {
-            method: "GET",
-            headers: {
-              "Content-Type": "application/json",
-            },
-          }
-        );
-        if (!response.ok) {
-          throw new Error("Failed to fetch options");
-        }
-        const data = await response.json();
-        setOptions(data.addresses);
-      } catch (error) {
-        console.error("Error fetching uplift options:", error);
-      }
-    };
+  /* ================= FETCH ADDRESSES ================= */
+  const fetchAddresses = async () => {
+    try {
+      const res = await fetch(`${API_BASE}/api/addresses`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
 
-    fetchOptions();
+      if (!res.ok) throw new Error("Failed to fetch addresses");
 
-    const lastFilledDate = localStorage.getItem('lastFilledDate');
-    const todayDate = new Date().toISOString().slice(0, 10); // Get today's date in YYYY-MM-DD format
-
-    if (!lastFilledDate || lastFilledDate !== todayDate) {
-      setIsOpen(true); // Show the safety form if it hasn't been filled today
+      const data = await res.json();
+      setAddresses(Array.isArray(data) ? data : []);
+    } catch (err) {
+      console.error("Fetch addresses error:", err);
+      setAddresses([]);
     }
-  }, [])
+  };
 
+  /* ================= UPDATE STATUS ================= */
+  const updateStatus = async (jobId, stage) => {
+    try {
+      const res = await fetch(
+        `${API_BASE}/api/jobs/${jobId}/status`,
+        {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({ stage }),
+        }
+      );
 
+      if (!res.ok) throw new Error("Status update failed");
 
+      if (user) {
+        fetchJobs(user.userId);
+      }
+    } catch (err) {
+      console.error("Update status error:", err);
+    }
+  };
+
+  /* ================= EFFECT ================= */
+  useEffect(() => {
+    if (!user?.userId || !token) return;
+
+    fetchJobs(user.userId);
+    fetchAddresses();
+
+    const lastFilled = localStorage.getItem("lastFilledDate");
+    const today = new Date().toISOString().slice(0, 10);
+
+    if (lastFilled !== today) {
+      setIsSafetyOpen(true);
+    }
+  }, [user, token]);
+
+  /* ================= UI HELPERS ================= */
+  const statusBadge = (status) => {
+    switch (status) {
+      case "accept":
+        return "bg-emerald-100 text-emerald-700";
+      case "uplift":
+        return "bg-indigo-100 text-indigo-700";
+      case "offload":
+        return "bg-amber-100 text-amber-700";
+      case "done":
+        return "bg-slate-100 text-slate-700";
+      default:
+        return "bg-slate-100 text-slate-600";
+    }
+  };
+
+  if (isLoading) {
+    return (
+      <div className="flex justify-center items-center h-64">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600" />
+      </div>
+    );
+  }
+  const activeJobId = jobs?.[0]?._id || null;
   return (
-    <div className='p-5 m-2'>
-     <SafetyForm isOpen={isOpen} handleSafetyFormClose={handleSafetyFormClose} options={options}/>
-        {jobs.length !== 0 ? jobs.map((job)=>(
-                <div key={job._id} style={{position: 'relative'}} className='bg-white p-2 font-semibold rounded-md mt-14'>
-                    {job.status.length !== 0 ? (
-                       <div
-                       style={{ position: "absolute" }}
-                       className="top-[-46px] left-0 bg-blue-600 text-white my-2 px-2 rounded-t-md font-semibold"
-                     >
-                      
-                      <div className='p-2'>
-                        Status: <span className='capitalize'>{job.status[job.status.length-1].type}</span>
-                      </div>
-                      </div>) : (
-                        <div style={{ position: "absolute" }}
-                        className="top-[-46px] left-0 bg-blue-600 text-white my-2 px-2 rounded-t-md font-semibold">
-                            <div className='p-2'>
-                        Status: Pending
-                      </div>
-                        </div>
-                      )}
-                  <div className='grid sm:grid-cols-2 grid-cols-1 px-2 mt-4'>
-                    <div>
-                    <div>
-                  Start Date - <span className='font-normal'>{job.jobStart}</span> 
-                  </div>
-                  <div>
-                  PIN - <span className='font-normal'>{job.pin}</span> 
-                  </div>
-                  <div>
-                  Commodity Code - <span className='font-normal'>{job.commodityCode}</span> 
-                  </div>
-                  <div>
-                  Doors - <span className='font-normal'>{job.doors}</span> 
-                  </div>
-                  <div>
-                  Slot - <span className='font-normal'>{job.slot}</span> 
-                  </div>
-                  <div>
-                  DG - <span className='font-normal'>{job.dg}</span> 
-                  </div>
-                  <div>
-                  Container No. - <span className='font-normal'>{job.containerNumber}</span> 
-                  </div>
-                    </div>
+    <div className="max-w-5xl mx-auto space-y-6">
+      <SafetyForm
+        isOpen={isSafetyOpen}
+        jobId={activeJobId}
+        handleSafetyFormClose={() => {
+          localStorage.setItem(
+            "lastFilledDate",
+            new Date().toISOString().slice(0, 10)
+          );
+          setIsSafetyOpen(false);
+        }}
+        options={addresses}
+      />
 
-                    <div>
-                    <div>
-                  Uplift Address - <span className='font-normal'>{job.uplift}</span> 
-                  </div>
-                  <div>
-                  Offload Address - <span className='font-normal'>{job.offload}</span> 
-                  </div>
-                  <div>
-                  Size - <span className='font-normal'>{job.size}ft.</span> 
-                  </div>
-                  <div>
-                  Release - <span className='font-normal'>{job.release}</span> 
-                  </div>
-                  <div>
-                  Random - <span className='font-normal'>{job.random}</span> 
-                  </div>
-                  <div>
-                  Weight - <span className='font-normal'>{job.weight} kg</span> 
-                  </div>
-                    </div>
+      <div className="flex items-center justify-between">
+        <h2 className="text-2xl font-bold text-slate-800">
+          Current Assignments
+        </h2>
+        <span className="px-3 py-1 bg-indigo-600 text-white rounded-full text-xs font-bold">
+          {jobs.length} Active
+        </span>
+      </div>
 
-                  </div>
-                 <div className='px-2 mt-1'>
-                 <span className="font-bold">Special Instructions:</span>
-                  <br/>
-                  <span className='text-lg font-normal'>{job.instructions}</span>
-                 </div>
-                 <div className='px-2 mt-2 font-semibold rounded-md text-black'>
-                  <div className='flex justify-center items-center'>
-                  {job.status.map((e, index)=>(
-                    <div key={e._id}><span className='capitalize'>{e.type}</span> - {new Intl.DateTimeFormat('en-US', {
-                      year: 'numeric',
-                      month: 'short', // Use 'short' to get the month in abbreviated form (e.g., Jan, Feb)
-                      day: '2-digit',
-                      timeZone: 'IST' // Adjust this according to your requirements
-                    }).format(new Date(e.timestamp)).replace(/(\w+)\s+(\d+),\s*(\d+)/, '$2-$1-$3')}
-                    {index !== job.status.length - 1 && ' > '}
-                    </div>
-                  ))}
-                  </div>
-                 </div>
+      {jobs.length === 0 && (
+        <div className="bg-white rounded-3xl p-12 text-center border-2 border-dashed border-slate-200">
+          <h4 className="text-lg font-bold text-slate-800">
+            No active jobs
+          </h4>
+          <p className="text-slate-500 mt-1">
+            Waiting for dispatcher to assign work.
+          </p>
+        </div>
+      )}
 
-                 <div className='flex items-center justify-center my-5'>
-                 <button
-                  className={`stage-btn ${job.status.length === 0 ? 'bg-gradient-to-r from-[#69a875] to-[#2bdb03be]' : 'cursor-not-allowed opacity-50 pointer-events-none hidden'}`}
-                  onClick={() => handleAccept(job._id, 'accept')}
-                  disabled={job.status.includes('accept')}
-                >
-                  Accept Job
-                </button>
-                <button
-                  className={`stage-btn ${job.status[job.status.length - 1]?.type === 'accept' ? 'bg-gradient-to-r from-[#8779c4] to-[#5f3cffe4]' : 'cursor-not-allowed opacity-50 pointer-events-none hidden'}`}
-                  onClick={() => handleAccept(job._id, 'uplift')}
-                  disabled={job.status.includes('uplift')}
-                >
-                  Uplift Done
-                </button>
-                <button
-                  className={`stage-btn ${job.status[job.status.length - 1]?.type === 'uplift' ? 'bg-gradient-to-r from-[#f293ff] to-[#0e1afebe]' : 'cursor-not-allowed opacity-50 pointer-events-none hidden'}`}
-                  onClick={() => handleAccept(job._id, 'offload')}
-                  disabled={job.status.includes('offload')}
-                >
-                  Offload Done
-                </button>
-                <button
-                  className={`stage-btn ${job.status[job.status.length - 1]?.type === 'offload'? 'bg-gradient-to-r from-[#f87575] to-[#0751ff]' : 'cursor-not-allowed opacity-50 pointer-events-none hidden'}`}
-                  onClick={() => handleAccept(job._id, 'done')}
-                  disabled={job.status.includes('done')}
-                >
-                  Job Done
-                </button>
-                 </div>
+      <div className="space-y-6">
+        {jobs.map((job) => {
+         
+          const currentStatus =
+            job.status?.[job.status.length - 1]?.stage || "pending";
+
+          return (
+            <div
+              key={job._id}
+              className="bg-white rounded-3xl border shadow-sm hover:shadow-xl transition-all"
+            >
+              <div className="p-6 md:p-8">
+                <div className="flex justify-between mb-6">
+                  <div>
+                    <p className="text-xs font-bold text-slate-400 uppercase">
+                      Job ID
+                    </p>
+                    <p className="text-lg font-bold">
+                      #{job._id.slice(-6).toUpperCase()}
+                    </p>
+                  </div>
+
+                  <span
+                    className={`px-4 py-2 rounded-xl text-sm font-bold uppercase ${statusBadge(
+                      currentStatus
+                    )}`}
+                  >
+                    {currentStatus}
+                  </span>
                 </div>
-              )) : (
-                <div className='items-center'>
-                  No Job Available At This Time.
+
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+                  <div>
+                    <p className="text-xs font-bold text-slate-400">Uplift</p>
+                    <p className="font-semibold">{job.uplift}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs font-bold text-slate-400">Offload</p>
+                    <p className="font-semibold">{job.offload}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs font-bold text-slate-400">
+                      Container
+                    </p>
+                    <p className="font-bold text-indigo-600">
+                      {job.containerNumber || "PENDING"}
+                    </p>
+                  </div>
                 </div>
-              )}
+
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+                  <div>
+                    <p className="text-xs text-slate-400">Start</p>
+                    <p>{job.jobStart}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-slate-400">PIN</p>
+                    <p className="font-mono">{job.pin}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-slate-400">Size</p>
+                    <p>{job.size}ft</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-slate-400">Weight</p>
+                    <p>{job.weight} kg</p>
+                  </div>
+                </div>
+
+                <div className="flex gap-4">
+                  {currentStatus === "pending" && (
+                    <button
+                      onClick={() => updateStatus(job._id, "accept")}
+                      className="flex-1 py-4 bg-emerald-600 text-white rounded-2xl font-bold"
+                    >
+                      Accept Job
+                    </button>
+                  )}
+                  {currentStatus === "accept" && (
+                    <button
+                      onClick={() => updateStatus(job._id, "uplift")}
+                      className="flex-1 py-4 bg-indigo-600 text-white rounded-2xl font-bold"
+                    >
+                      Uplift Done
+                    </button>
+                  )}
+                  {currentStatus === "uplift" && (
+                    <button
+                      onClick={() => updateStatus(job._id, "offload")}
+                      className="flex-1 py-4 bg-amber-500 text-white rounded-2xl font-bold"
+                    >
+                      Offload Done
+                    </button>
+                  )}
+                  {currentStatus === "offload" && (
+                    <button
+                      onClick={() => updateStatus(job._id, "done")}
+                      className="flex-1 py-4 bg-slate-800 text-white rounded-2xl font-bold"
+                    >
+                      Job Completed
+                    </button>
+                  )}
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
     </div>
-  )
-}
+  );
+};
 
-export default NewJob
+export default NewJob;

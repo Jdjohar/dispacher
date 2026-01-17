@@ -1,254 +1,327 @@
-import React, {useState, useEffect, useRef} from 'react'
-import { DownloadTableExcel } from 'react-export-table-to-excel';
-import ReactPaginate from 'react-paginate';
+import React, { useEffect, useState } from "react";
+import ReactPaginate from "react-paginate";
 
+/* ===============================
+   UTILS
+================================ */
+const decodeToken = (token) => {
+  try {
+    return JSON.parse(atob(token.split(".")[1]));
+  } catch {
+    return null;
+  }
+};
+
+/* ===============================
+   MAIN COMPONENT
+================================ */
 const ExcelJob = () => {
-  const [allJobs, setAllJobs] = useState([]);
-  const tableRef = useRef(null);
-  const [id, setId] = useState({});
-  const [ids, setIds] = useState([]);
-  const [updates, setUpdates] = useState([])
-  const [pageNumber, setPageNumber] = useState(0);
-  const [showAllJobs, setShowAllJobs] = useState(false); // State to toggle showing all jobs
+  const API_BASE = import.meta.env.VITE_API_URL || "https://dispacher-nu.vercel.app";
+  const token = localStorage.getItem("token");
 
-  const toggleShowAllJobs = () => {
-    setShowAllJobs(!showAllJobs);
-    setPageNumber(0); // Reset page number when toggling
-  };
+  if (!token) {
+    return (
+      <div className="text-center mt-20 text-red-600 font-bold">
+        Not authenticated
+      </div>
+    );
+  }
+
+  const decoded = decodeToken(token);
+
+  /* 🔒 HARD ROLE GUARD */
+  if (!["admin", "dispatcher"].includes(decoded?.userType)) {
+    return (
+      <div className="max-w-xl mx-auto mt-20 p-6 bg-rose-50 border border-rose-200 rounded-xl text-center">
+        <h2 className="text-lg font-bold text-rose-800">
+          Access Restricted
+        </h2>
+        <p className="text-sm text-rose-700 mt-2">
+          Only Admin or Dispatcher can assign drivers.
+        </p>
+      </div>
+    );
+  }
+
+  /* ===============================
+     STATE
+  ================================ */
+  const [jobs, setJobs] = useState([]);
+  const [drivers, setDrivers] = useState([]);
+  const [assignments, setAssignments] = useState({});
+  const [pageNumber, setPageNumber] = useState(0);
+  const [showAll, setShowAll] = useState(false);
+  const [loading, setLoading] = useState(true);
+
   const jobsPerPage = 10;
 
-  const getColorBasedOnDate = (jobStartDate, containerNum) => {
-    const jobStart = new Date(jobStartDate);
-    const today = new Date();
-    const differenceInMilliseconds = jobStart.getTime() - today.getTime();
-    const differenceInDays = Math.ceil(differenceInMilliseconds / (24 * 60 * 60 * 1000));
-   
-    // If today is one day away from jobStart, change color
-    if (differenceInDays === 1 && !containerNum) {
-      return {
-        backgroundColor: '#DD0404', // Set your desired background color here
-        textColor: 'white', // Set your desired text color here
-      };
-    }
-  
-    // Default colors
-    return {
-      backgroundColor: 'white',
-      textColor: 'black',
-    };
-    
-  };
-
-  const calculateDaysDifference = (date1, date2) => {
-    const differenceInMilliseconds = Math.abs(date1.getTime() - date2.getTime());
-    return Math.ceil(differenceInMilliseconds / (24 * 60 * 60 * 1000));
-  };
-
-  const jobsWithDaysDifference = allJobs.map((job) => {
-    const jobStart = new Date(job.jobStart);
-    const today = new Date();
-    const daysDifference = calculateDaysDifference(today, jobStart);
-  
-    return { ...job, daysDifference };
-  });
-  
-  const sortedJobs = jobsWithDaysDifference.sort((a, b) => {
-    if (!a.containerNum && b.containerNum) {
-      return -1;
-  }
-  // If a job is assigned and b job is not assigned, b should come before a
-  if (a.containerNum && !b.containerNum) {
-      return 1;
-  }
-  // If both jobs are either assigned or not assigned, sort by daysDifference
-  return a.daysDifference - b.daysDifference;
-  })
-
-  const getAllJobs = async () => {
+  /* ===============================
+     FETCH DATA
+  ================================ */
+  const fetchData = async () => {
     try {
-      const response = await fetch("https://dispacher-nu.vercel.app/api/jobs/all", {
-        method: "GET",
-        headers: {
-          "Content-Type": "application/json",
-        },
-      });
-      const data = await response.json();
-      console.log(data.jobs);
-      setAllJobs(data.jobs)
-    } catch (error) {
-      console.log(error);
-    }
-  }
+      const [jobsRes, driversRes] = await Promise.all([
+        fetch(`${API_BASE}/api/jobs`, {
+          headers: { Authorization: `Bearer ${token}` },
+        }),
+        fetch(`${API_BASE}/api/users/role/container`, {
+          headers: { Authorization: `Bearer ${token}` },
+        }),
+      ]);
 
-  const fetchIds = async() => {
-    try {
-      const response = await fetch("https://dispacher-nu.vercel.app/api/unassigned", {
-        method: "GET",
-        headers: {
-          "Content-Type": "application/json",
-        },
-      });
-      const containers = await response.json();
-      setIds(containers)
-    } catch (error) {
-      console.log(error);
-    }
-  }
+      const jobsData = await jobsRes.json();
+      const driversData = await driversRes.json();
+      console.log(driversData,"driversData");
+      
 
-  const handleAssign = async (e, jobId) => {
-    e.preventDefault();
-
-    const selectedId = id[jobId];
-
-    try {
-      const response = await fetch('https://dispacher-nu.vercel.app/api/updateJob', {
-      method: 'PUT',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        selectedId,
-        jobId,
-      }),
-    });
-
-    
-
-    if (!response.ok ) {
-      throw new Error('Failed to update job');
-    }
-
-    const updatedJob = await response.json();
-    setUpdates(updatedJob)
-    console.log('Job updated successfully:', updatedJob);
-
-    } catch (error) {
-      console.log(error);
+      setJobs(jobsData);
+      setDrivers(driversData.filter((d) => d.userMainId));
+    } catch (err) {
+      console.error("FETCH ERROR:", err);
+      alert("Failed to load jobs or drivers");
+    } finally {
+      setLoading(false);
     }
   };
-
-  const pageCount = Math.ceil(
-    (showAllJobs ? allJobs.length : sortedJobs.length) / jobsPerPage
-  );
-  const offset = pageNumber * jobsPerPage;
-  const currentPageJobs = showAllJobs ? allJobs : sortedJobs.slice(offset, offset + jobsPerPage);
-
-  const handlePageChange = ({ selected }) => {
-    setPageNumber(selected);
-  };
-
-  useEffect(()=>{
-    getAllJobs()
-    fetchIds()
-  }, [])
 
   useEffect(() => {
-    getAllJobs()
-    fetchIds();
-  }, [updates]);
+    fetchData();
+  }, []);
+  useEffect(() => {
+    console.log("ASSIGNMENTS STATE:", assignments);
+  }, [assignments]);
+  /* ===============================
+     ASSIGN DRIVER (FIXED)
+  ================================ */
+  const handleAssign = async (jobId) => {
+    const userId = assignments[jobId]; // ✅ THIS IS THE SELECTED DRIVER ID
+  
+    console.log("JOB:", jobId);
+    console.log("ASSIGN DRIVER:", userId);
+  
+    if (!userId) {
+      alert("Select a driver first");
+      return;
+    }
+  
+    try {
+      const res = await fetch(
+        `${API_BASE}/api/jobs/${jobId}/assign`,
+        {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({ userId }),
+        }
+      );
+  
+      const data = await res.json();
 
-  const rowStyle = {
-    borderBottom: '1px solid #ccc', // You can adjust the border style as needed
+      console.log(data,"Data Assign");
+      
+  
+      if (!res.ok) {
+        console.error("ASSIGN FAILED:", data);
+        alert(data.message || "Assignment failed");
+        return;
+      }
+  
+      // Clear selection
+      setAssignments((prev) => {
+        const copy = { ...prev };
+        delete copy[jobId];
+        return copy;
+      });
+  
+      fetchData();
+    } catch (err) {
+      console.error("NETWORK ERROR:", err);
+      alert("Server not reachable");
+    }
+  };
+  
+  /* ===============================
+     CSV EXPORT
+  ================================ */
+  const exportCSV = () => {
+    const headers =
+      "Job Date,PIN,Slot,Size,DG,Uplift,Offload,Weight,Container,Release,Driver\n";
+
+    const rows = jobs
+      .map(
+        (j) =>
+          `${j.jobStart},${j.pin},${j.slot},${j.size},${j.dg},${j.uplift},${j.offload},${j.weight},${j.containerNumber || ""},${j.release || ""},${j.assignedTo?.username || "Unassigned"}`
+      )
+      .join("\n");
+
+    const blob = new Blob([headers + rows], { type: "text/csv" });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "jobs-export.csv";
+    a.click();
   };
 
+  /* ===============================
+     HELPERS
+  ================================ */
+  const urgencyClass = (job) => {
+    if (job.assignedTo) return "";
+    const diff =
+      (new Date(job.jobStart) - new Date()) /
+      (1000 * 60 * 60 * 24);
+    return diff <= 1 ? "bg-rose-50 text-rose-800" : "";
+  };
+
+  /* ===============================
+     PAGINATION
+  ================================ */
+  const pageCount = Math.ceil(jobs.length / jobsPerPage);
+  const offset = pageNumber * jobsPerPage;
+  const currentJobs = showAll
+    ? jobs
+    : jobs.slice(offset, offset + jobsPerPage);
+
+  if (loading) {
+    return (
+      <div className="flex justify-center items-center h-64">
+        <div className="animate-spin h-12 w-12 rounded-full border-b-2 border-indigo-600" />
+      </div>
+    );
+  }
+
+  /* ===============================
+     RENDER
+  ================================ */
   return (
-    <div>
-      <button className='btn mt-3 ml-4' onClick={toggleShowAllJobs}>
-        {showAllJobs ? 'Show Paginated Jobs' : 'Show All Jobs'}
-      </button>
-       <DownloadTableExcel
-                    filename="jobs table"
-                    sheet="jobs"
-                    currentTableRef={tableRef.current}
+    <div className="max-w-6xl mx-auto space-y-6">
+      {/* CONTROLS */}
+      <div className="flex justify-between flex-wrap gap-4">
+        <div className="flex gap-2">
+          <button
+            onClick={() => setShowAll(!showAll)}
+            className="px-4 py-2 border rounded-xl font-bold text-sm bg-white"
+          >
+            {showAll ? "Show Paginated" : "Show All"}
+          </button>
+
+          <button
+            onClick={exportCSV}
+            className="px-4 py-2 bg-indigo-600 text-white rounded-xl font-bold text-sm"
+          >
+            Export CSV
+          </button>
+        </div>
+      </div>
+
+      {/* TABLE */}
+      <div className="bg-white rounded-3xl border shadow-sm overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full text-left">
+            <thead className="bg-slate-50 border-b">
+              <tr>
+                <th className="px-6 py-4 text-xs font-bold">Date & PIN</th>
+                <th className="px-6 py-4 text-xs font-bold">Route</th>
+                <th className="px-6 py-4 text-xs font-bold">Details</th>
+                <th className="px-6 py-4 text-xs font-bold">Driver</th>
+              </tr>
+            </thead>
+
+            <tbody>
+              {currentJobs.map((job) => (
+                <tr
+                  key={job._id}
+                  className={`border-b ${urgencyClass(job)}`}
                 >
-                   <button className='btn mt-3 ml-4'>Export Page Jobs</button>
-       </DownloadTableExcel>
-        <div className='m-5 bg-white rounded-xl '>
-            <div className='overflow-x-auto p-2 pb-4'>
-              <div className='table-container'>
-            <table ref={tableRef} className='custom-table'>
-                 <tbody>
-                    <tr>
-                        <th>Start Date</th>
-                        <th>Pin:</th>
-                        <th>Booking Slot:</th>
-                        <th>Commmodity Code:</th>
-                        <th>Size</th>
-                        <th>DG</th>
-                        <th>Uplift Address:</th>
-                        <th>Offload Address:</th>
-                        <th>Doors:</th>
-                        <th>Random:</th>
-                        <th>Release:</th>
-                        <th>Weight</th>
-                        <th>Special Instructions</th>
-                        <th>Container Number</th>
-                        <th>Assign User</th>
-                    </tr>
-                    {currentPageJobs.map((job)=>{
-                      const { backgroundColor, textColor } = getColorBasedOnDate(job.jobStart, job.userMainId);
-                      return(
-                        <tr key={job._id} style={{...rowStyle, backgroundColor, color: textColor}}>
-                        <td>{job.jobStart}</td>
-                        <td>{job.pin}</td>
-                        <td>{job.slot}</td>
-                        <td>{job.commodityCode}</td>
-                        <td>{job.size}</td>
-                        <td>{job.dg}</td>
-                        <td>{job.uplift}</td>
-                        <td>{job.offload}</td>
-                        <td>{job.doors}</td>
-                        <td>{job.random}</td>
-                        <td>{job.release}</td>
-                        <td>{job.weight}</td>
-                        <td>{job.instructions}</td>
-                        <td>{job.containerNumber}</td>
-                        {job.userMainId ? (
-                          <td>{job.userMainId}</td>
-                        ) : (
-                          <td>
-                            <form onSubmit={(e)=>handleAssign(e, job._id)} className="flex items-center min-w-full">
-                            <select
-                          value={id[job._id] || ""}
-                          required
-                          onChange={(e) => setId({ ...id, [job._id]: e.target.value })}
-                          className="rounded-md p-2 bg-white text-black ring-1 ring-blue-500 ring-opacity-2 focus:outline-none my-3 ml-1 min-w-50"
+                  <td className="px-6 py-4">
+                    <div className="font-bold">{job.jobStart}</div>
+                    <div className="text-xs text-slate-500">
+                      PIN: {job.pin}
+                    </div>
+                    <div className="text-xs text-slate-500">
+                      ID: {job._id}
+                    </div>
+                  </td>
+
+                  <td className="px-6 py-4 text-xs">
+                    <div>{job.uplift}</div>
+                    <div>{job.offload}</div>
+                  </td>
+
+                  <td className="px-6 py-4 text-xs">
+                    {job.size}FT • {job.weight}KG • DG: {job.dg}
+                  </td>
+
+                  <td className="px-6 py-4">
+                    {job.assignedTo ? (
+                      <span className="px-3 py-1 bg-emerald-600 text-white rounded-full text-xs font-bold">
+                        Assigned: {job.assignedTo.username}
+                        {console.log(job, "sddsd 2")}
+
+                      </span>
+                    ) : (
+                      <div className="flex gap-2">
+                        <select
+                          value={assignments[job._id] || ""}
+                          onChange={(e) =>
+                            setAssignments({
+                              ...assignments,
+                              [job._id]: e.target.value,
+                            })
+                          }
+                          className="border rounded px-2 py-1 text-xs"
                         >
-                          <option value="" disabled>
-                            Select User ID
+                          <option value="">Select Driver</option>
+                          {drivers.map((d) => (
+                            <option key={d._id} value={d._id}>
+                            {d.username} ({d.userMainId})
                           </option>
-                          {ids && ids.map((cont) => (
-                            <option key={cont._id} value={cont.userMainId}>{cont.userMainId}</option>
                           ))}
                         </select>
-                        <button type="submit" className="bg-black m-2.5 text-white py-1 px-4 rounded-md">Assign</button>
-                            </form>
-                          </td>
-                        )}
-                      </tr>
-                     )})}
-                  </tbody>
-                </table>
-                </div>
-                <div className='pagination-container'>
-                  {showAllJobs ? null : (
-                    <ReactPaginate
-                    previousLabel={'Prev.'}
-                    nextLabel={'Next'}
-                    pageCount={pageCount}
-                    onPageChange={handlePageChange}
-                    containerClassName={'pagination'}
-                    previousLinkClassName={'pagination__link'}
-                    nextLinkClassName={'pagination__link'}
-                    disabledClassName={'pagination__link--disabled'}
-                    activeClassName={'pagination__link--active'}
-                  />
-                  )}    
-               </div>
-            </div>
+                        {console.log(job, "Job ID")}
+                        <button
+                          onClick={() => handleAssign(job._id)}
+                          className="px-3 bg-slate-800 text-white rounded text-xs font-bold"
+                        >
+                          Assign
+                        </button>
+                      </div>
+                    )}
+                  </td>
+                </tr>
+              ))}
+
+              {jobs.length === 0 && (
+                <tr>
+                  <td colSpan="4" className="py-10 text-center text-slate-400">
+                    No jobs found
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
         </div>
+
+        {!showAll && pageCount > 1 && (
+          <div className="p-6 border-t">
+            <ReactPaginate
+              previousLabel="Prev"
+              nextLabel="Next"
+              pageCount={pageCount}
+              onPageChange={({ selected }) =>
+                setPageNumber(selected)
+              }
+              containerClassName="flex justify-center gap-2"
+              pageLinkClassName="px-3 py-1 rounded"
+              activeLinkClassName="bg-indigo-600 text-white"
+            />
+          </div>
+        )}
+      </div>
     </div>
-  )
-}
+  );
+};
 
 export default ExcelJob;

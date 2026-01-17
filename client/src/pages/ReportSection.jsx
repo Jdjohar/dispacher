@@ -1,97 +1,166 @@
-import React, {useState, useRef} from 'react'
-import { DownloadTableExcel } from 'react-export-table-to-excel';
+import React, { useState } from "react";
 
 const ReportSection = () => {
   const [reportData, setReportData] = useState([]);
-  const [jobDate, setJobDate] = useState('')
-  const tableRef = useRef(null);
+  const [fromDate, setFromDate] = useState("");
+  const [toDate, setToDate] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
 
-  const reportJobs = async () => {
+  const API_BASE = import.meta.env.VITE_API_URL || "https://dispacher-nu.vercel.app";
+  const token = localStorage.getItem("token");
+
+  /* ================= FETCH REPORTS ================= */
+  const fetchReports = async () => {
+    if (!fromDate || !toDate || !token) return;
+
+    setIsLoading(true);
     try {
-      const response = await fetch(`https://dispacher-nu.vercel.app/api/reportJobs?date=${jobDate}`, {
-        method: "GET",
-        headers: {
-          "Content-Type": "application/json",
-        },
-      });
-      const data = await response.json();
-      console.log(data.data);
-      setReportData(data.data)
-    } catch (error) {
-      console.log(error);
+      const res = await fetch(
+        `${API_BASE}/api/reports/jobs?from=${fromDate}&to=${toDate}`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+
+      if (!res.ok) throw new Error("Failed to fetch reports");
+
+      const data = await res.json();
+      setReportData(Array.isArray(data) ? data : []);
+    } catch (err) {
+      console.error("Report fetch error:", err);
+      setReportData([]);
+    } finally {
+      setIsLoading(false);
     }
-  }
-
-  // Example data (replace with actual data fetching logic)
-
-
-  const handleReportButtonClick = () => {
-    reportJobs();
   };
 
+  /* ================= EXPORT CSV ================= */
+  const exportCSV = () => {
+    if (!reportData.length) return;
+
+    const headers =
+      "Completed Date,Uplift,Offload,Size,Container,Release,Driver\n";
+
+    const rows = reportData
+      .map(
+        (j) =>
+          `"${new Date(j.updatedAt).toLocaleDateString()}","${
+            j.uplift || "-"
+          }","${j.offload || "-"}","${j.size || "-"}","${
+            j.containerNumber || "N/A"
+          }","${j.release || "N/A"}","${
+            j.assignedTo?.username || "N/A"
+          }"`
+      )
+      .join("\n");
+
+    const blob = new Blob([headers + rows], { type: "text/csv" });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `Completed_Jobs_${fromDate}_to_${toDate}.csv`;
+    a.click();
+  };
+
+  /* ================= RENDER ================= */
   return (
-    <div>
-      <div className='mx-5 mt-2 p-2 bg-white rounded-md flex justify-between'>
-        
-        <h1 className='font-bold text-lg mt-1'>Report Section</h1>
-        
-        <div className='flex justify-between'>
-        <input type="date" value={jobDate}
-                onChange={(e) => setJobDate(e.target.value)}
-                placeholder="Enter Job Date"
-                required
-                className="p-2 font-semibold placeholder-gray-500 rounded-xl border-none outline-none bg-purple-70 w-50" />
-                <button className="bg-black ml-1 text-white px-1 rounded-md" onClick={handleReportButtonClick}>Search</button>
+    <div className="space-y-6 max-w-6xl mx-auto px-4">
+      {/* HEADER */}
+      <div className="bg-white p-6 rounded-3xl border shadow-sm flex flex-col md:flex-row gap-6 justify-between">
+        <div>
+          <h2 className="text-xl font-bold text-slate-800">
+            Completed Jobs Report
+          </h2>
+          <p className="text-sm text-slate-500">
+            View completed jobs by date range.
+          </p>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-3">
+          <input
+            type="date"
+            value={fromDate}
+            onChange={(e) => setFromDate(e.target.value)}
+            className="px-4 py-2 rounded-xl border text-sm"
+          />
+          <span className="text-slate-400 font-bold">→</span>
+          <input
+            type="date"
+            value={toDate}
+            onChange={(e) => setToDate(e.target.value)}
+            className="px-4 py-2 rounded-xl border text-sm"
+          />
+          <button
+            onClick={fetchReports}
+            disabled={!fromDate || !toDate || isLoading}
+            className="px-6 py-2 bg-slate-900 text-white rounded-xl text-sm font-bold disabled:opacity-50"
+          >
+            {isLoading ? "Loading..." : "Search"}
+          </button>
         </div>
       </div>
 
-      <div className='m-5 bg-white border border-black overflow-auto'>
-         {reportData && reportData.length === 0 ? (
-          <h1 className='text-center'>No Job found</h1>
-        ) : (
-          <table ref={tableRef} className="min-w-full divide-y divide-gray-200">
-        <thead className="bg-gray-200">
-          <tr>
-            <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider whitespace-nowrap">
-             From
-            </th>
-            <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider whitespace-nowrap">
-              To
-            </th>
-            <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider whitespace-nowrap">
-              Size
-            </th>
-            <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider whitespace-nowrap">
-              Container No.
-            </th>
-            <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider whitespace-nowrap">
-              Release No.
-            </th>
-          </tr>
-        </thead>
-        <tbody className="bg-white divide-y divide-gray-200">
-          {reportData && reportData.map((row) => (
-            <tr key={row._id}>
-              <td className="px-6 py-4">{row.uplift}</td>
-              <td className="px-6 py-4">{row.offload}</td>
-              <td className="px-6 py-4 whitespace-nowrap">{row.size}</td>
-              <td className="px-6 py-4 whitespace-nowrap">{row.containerNumber}</td>
-              <td className="px-6 py-4 whitespace-nowrap">{row.release}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+      {/* TABLE */}
+      <div className="bg-white rounded-3xl border shadow-sm overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full text-left">
+            <thead className="bg-slate-50 border-b">
+              <tr>
+                <th className="px-6 py-4 text-xs font-bold">Date</th>
+                <th className="px-6 py-4 text-xs font-bold">Uplift</th>
+                <th className="px-6 py-4 text-xs font-bold">Offload</th>
+                <th className="px-6 py-4 text-xs font-bold text-center">Size</th>
+                <th className="px-6 py-4 text-xs font-bold">Container</th>
+                <th className="px-6 py-4 text-xs font-bold">Release</th>
+                <th className="px-6 py-4 text-xs font-bold">Driver</th>
+              </tr>
+            </thead>
+
+            <tbody>
+              {reportData.map((job) => (
+                <tr key={job._id} className="border-b hover:bg-slate-50">
+                  <td className="px-6 py-4">
+                    {new Date(job.updatedAt).toLocaleDateString()}
+                  </td>
+                  <td className="px-6 py-4">{job.uplift}</td>
+                  <td className="px-6 py-4">{job.offload}</td>
+                  <td className="px-6 py-4 text-center">{job.size} FT</td>
+                  <td className="px-6 py-4">
+                    {job.containerNumber || "N/A"}
+                  </td>
+                  <td className="px-6 py-4">{job.release || "N/A"}</td>
+                  <td className="px-6 py-4 font-semibold text-indigo-600">
+                    {job.assignedTo?.username || "N/A"}
+                  </td>
+                </tr>
+              ))}
+
+              {!isLoading && reportData.length === 0 && (
+                <tr>
+                  <td colSpan={7} className="py-16 text-center text-slate-400">
+                    No completed jobs found for this date range.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+
+        {reportData.length > 0 && (
+          <div className="p-6 border-t flex justify-end">
+            <button
+              onClick={exportCSV}
+              className="px-6 py-2 bg-emerald-600 text-white rounded-xl font-bold"
+            >
+              Export CSV
+            </button>
+          </div>
         )}
       </div>
-      <DownloadTableExcel
-                    filename="Report Section"
-                    sheet="jobs"
-                    currentTableRef={tableRef.current}
-                >
-                   <button className='btn ml-5'>Export Jobs</button>
-       </DownloadTableExcel>
     </div>
-  )
-}
+  );
+};
 
-export default ReportSection
+export default ReportSection;

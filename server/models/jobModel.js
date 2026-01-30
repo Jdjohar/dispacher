@@ -1,8 +1,9 @@
 const mongoose = require('mongoose');
 const jobSchema = new mongoose.Schema(
   {
-    jobNumber: {type: String, unique: true, required: true, trim: true,},
+    jobNumber: String,
     uplift: String,
+    customer: String,
     offload: String,
     jobStart: Date,
     size: String,
@@ -18,7 +19,11 @@ const jobSchema = new mongoose.Schema(
     containerNumber: String,
 
     assignedTo: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
-
+    proof: {
+      notes: String,
+      images: [String], // Cloudinary URLs
+      submittedAt: Date,
+    },
     status: [
       {
         stage: {
@@ -28,7 +33,11 @@ const jobSchema = new mongoose.Schema(
         timestamp: { type: Date, default: Date.now },
       },
     ],
-
+proof: {
+  notes: String,
+  images: [String], // Cloudinary URLs
+  submittedAt: Date,
+},
     isCompleted: { type: Boolean, default: false },
   },
   { timestamps: true }

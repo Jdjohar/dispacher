@@ -23,6 +23,8 @@ const CreateJob = () => {
   const [uplift, setUplift] = useState("");
   const [offload, setOffload] = useState("");
   const [jobStart, setJobStart] = useState("");
+  const [jobNumber, setjobNumber] = useState("");
+  const [customer, setcustomer] = useState("");
   const [size, setSize] = useState("20");
 
   const [idType, setIdType] = useState(""); // release | container
@@ -74,6 +76,8 @@ const CreateJob = () => {
       uplift,
       offload,
       jobStart,
+      jobNumber,
+      customer,
       size,
       slot,
       pin,
@@ -99,11 +103,14 @@ const CreateJob = () => {
       });
 
       if (!res.ok) throw new Error("Job creation failed");
+console.log(payload,"payload");
 
       setMessage({ type: "success", text: "Job created successfully" });
 
       /* RESET */
       setUplift("");
+      setjobNumber("");
+      setcustomer("");
       setOffload("");
       setJobStart("");
       setSize("20");
@@ -137,6 +144,24 @@ const CreateJob = () => {
         </div>
 
         <form onSubmit={handleSubmit} className="p-8 space-y-8">
+
+        <div className="grid md:grid-cols-3 gap-6">
+            <input
+              value={jobNumber}
+              onChange={(e) => setjobNumber(e.target.value)}
+              placeholder="Job Number"
+              className="px-4 py-3 rounded-xl border"
+            />
+            <input
+              value={customer}
+              onChange={(e) => setcustomer(e.target.value)}
+              placeholder="Customer Name"
+              className="px-4 py-3 rounded-xl border"
+            />
+           
+          </div>
+
+
           {/* LOCATIONS */}
           <div className="grid md:grid-cols-2 gap-6">
             <select
@@ -274,6 +299,7 @@ const CreateJob = () => {
               onChange={(e) => setDg(e.target.value)}
               className="px-4 py-3 rounded-xl border"
             >
+              <option>Select Option</option>
               <option value="false">DG No</option>
               <option value="true">DG Yes</option>
             </select>

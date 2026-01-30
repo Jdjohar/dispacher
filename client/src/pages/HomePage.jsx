@@ -2,6 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import logo from '../assets/image 1.png'
 
 const HomePage = () => {
   const navigate = useNavigate();
@@ -10,6 +11,7 @@ const HomePage = () => {
   const [password, setPassword] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
+
 
   useEffect(() => {
     if (isLoggedIn()) {
@@ -54,10 +56,10 @@ const HomePage = () => {
     <div className="min-h-screen bg-slate-50 flex flex-col justify-center py-12 sm:px-6 lg:px-8">
       <div className="sm:mx-auto sm:w-full sm:max-w-md">
         <div className="flex justify-center">
-          <div className="w-16 h-16 bg-indigo-600 rounded-2xl flex items-center justify-center text-white shadow-xl shadow-indigo-100 mb-4">
-            <svg className="w-10 h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
-            </svg>
+          <div className="w-32 h-16  flex items-center justify-center text-white shadow-indigo-100 mb-4">
+           <img src={logo} className='' />
+           
+           
           </div>
         </div>
         <h2 className="mt-2 text-center text-3xl font-extrabold text-slate-900 tracking-tight">

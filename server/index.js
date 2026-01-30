@@ -2,7 +2,7 @@
  * LOAD ENV
  ************************************************/
 require('dotenv').config();
-
+const uploadRoutes = require("./upload.js");
 /************************************************
  * IMPORTS
  ************************************************/
@@ -25,7 +25,7 @@ const crypto = require("crypto");
  ************************************************/
 const app = express();
 const PORT = process.env.PORT || 10000;
-
+  
 /************************************************
  * MIDDLEWARE
  ************************************************/
@@ -48,6 +48,8 @@ mongoose.connect(process.env.MONGODB_URL)
     process.exit(1);
   });
 
+  app.use("/api/upload", uploadRoutes);
+  
 /************************************************
  * AUTH MIDDLEWARE
  ************************************************/
@@ -218,15 +220,29 @@ app.delete('/api/addresses/:id', auth, async (req, res) => {
  ************************************************/
 app.post('/api/jobs', auth, async (req, res) => {
   const job = await Job.create({
-    ...req.body,
-    jobNumber:
-    req.body.jobNumber ||
-    `JOB-${Date.now()}-${crypto.randomInt(100, 999)}`,
+    jobNumber: req.body.jobNumber,
+    customer: req.body.customer,
+    uplift: req.body.uplift,
+    offload: req.body.offload,
+    jobStart: new Date(req.body.jobStart),
+    size: req.body.size,
+    slot: req.body.slot,
+    pin: req.body.pin,
+    random: req.body.random,
+    doors: req.body.doors,
+    commodityCode: req.body.commodityCode,
+    dg: req.body.dg === true || req.body.dg === "true",
+    instructions: req.body.instructions,
+    weight: Number(req.body.weight),
+    release: req.body.release,
+    containerNumber: req.body.containerNumber,
     isCompleted: false,
     status: [{ stage: 'accept' }]
   });
+
   res.json(job);
 });
+
 
 
 app.get('/api/jobs', auth, async (req, res) => {
@@ -317,6 +333,28 @@ app.delete('/api/jobs/:id', auth, role(['admin']), async (req, res) => {
   res.json({ success: true });
 });
 
+app.put("/api/jobs/:id/proof", auth, async (req, res) => {
+  const { notes, images } = req.body;
+
+  const job = await Job.findById(req.params.id);
+
+  if (job.isCompleted) {
+    return res.status(400).json({ message: "Already completed" });
+  }
+
+  job.proof = {
+    notes,
+    images,
+    submittedAt: new Date(),
+  };
+
+  job.status.push({ stage: "done" });
+  job.isCompleted = true;
+
+  await job.save();
+  res.json(job);
+});
+
 /************************************************
  * SAFETY FORM ROUTES
  ************************************************/
@@ -395,8 +433,8 @@ app.get('/api/reports/jobs/date/:date', auth, role(['admin', 'dispatcher']), asy
 /************************************************
  * START SERVER
  ************************************************/
-// app.listen(PORT, () => {
-//   console.log(`🚀 Server running on port ${PORT}`);
-// });
+app.listen(PORT, () => {
+  console.log(`🚀 Server running on port ${PORT}`);
+});
 
 module.exports = app;

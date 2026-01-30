@@ -7,40 +7,27 @@ const API_BASE = import.meta.env.VITE_API_URL || "https://dispacher-nu.vercel.ap
 const NewJob = () => {
   const { user } = useAuth();
   const token = localStorage.getItem("token");
-console.log(typeof user,"sdds");
-
+  console.log(typeof user, "sdds");
 
   const [jobs, setJobs] = useState([]);
   const [addresses, setAddresses] = useState([]);
   const [isSafetyOpen, setIsSafetyOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
 
-  
-
+  // proof
+  const [proofNotes, setProofNotes] = useState("");
+  const [proofImages, setProofImages] = useState([]);
+  const [activeJob, setActiveJob] = useState(null);
 
   /* ================= FETCH JOBS ================= */
   const fetchJobs = async (userId) => {
-    console.log(userId,"userMainId");
-    
     try {
-      const res = await fetch(
-        `${API_BASE}/api/jobs/user/${userId}`,
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        }
-      );
-
-      console.log(res,"res");
-      
+      const res = await fetch(`${API_BASE}/api/jobs/user/${userId}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
 
       if (!res.ok) throw new Error("Failed to fetch jobs");
-
       const data = await res.json();
-
-      console.log(data, "sdsdsdsd");
-      
       setJobs(Array.isArray(data) ? data : []);
     } catch (err) {
       console.error("Fetch jobs error:", err);
@@ -54,13 +41,10 @@ console.log(typeof user,"sdds");
   const fetchAddresses = async () => {
     try {
       const res = await fetch(`${API_BASE}/api/addresses`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
+        headers: { Authorization: `Bearer ${token}` },
       });
 
       if (!res.ok) throw new Error("Failed to fetch addresses");
-
       const data = await res.json();
       setAddresses(Array.isArray(data) ? data : []);
     } catch (err) {
@@ -72,25 +56,72 @@ console.log(typeof user,"sdds");
   /* ================= UPDATE STATUS ================= */
   const updateStatus = async (jobId, stage) => {
     try {
-      const res = await fetch(
-        `${API_BASE}/api/jobs/${jobId}/status`,
-        {
-          method: "PUT",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify({ stage }),
-        }
-      );
+      const res = await fetch(`${API_BASE}/api/jobs/${jobId}/status`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ stage }),
+      });
 
       if (!res.ok) throw new Error("Status update failed");
-
-      if (user) {
-        fetchJobs(user.userId);
-      }
+      if (user) fetchJobs(user.userId);
     } catch (err) {
       console.error("Update status error:", err);
+    }
+  };
+
+  /* ================= OPEN MODAL ================= */
+  const openProofModal = (jobId) => {
+    setActiveJob(jobId);
+  };
+
+  /* ================= SUBMIT PROOF ================= */
+  const submitProof = async () => {
+    if (proofNotes.trim() === "" && proofImages.length === 0) {
+      alert("Please add notes or at least one image");
+      return;
+    }
+
+    try {
+      const formData = new FormData();
+      for (let file of proofImages) {
+        formData.append("images", file);
+      }
+
+      const uploadRes = await fetch(`${API_BASE}/api/upload`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+        body: formData,
+      });
+
+      if (!uploadRes.ok) {
+        alert("Image upload failed");
+        return;
+      }
+
+      const { urls } = await uploadRes.json();
+
+      await fetch(`${API_BASE}/api/jobs/${activeJob}/proof`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          notes: proofNotes,
+          images: urls,
+        }),
+      });
+
+      setActiveJob(null);
+      setProofNotes("");
+      setProofImages([]);
+      fetchJobs(user.userId);
+    } catch (err) {
+      console.error("Submit proof error:", err);
+      alert("Something went wrong");
     }
   };
 
@@ -104,9 +135,7 @@ console.log(typeof user,"sdds");
     const lastFilled = localStorage.getItem("lastFilledDate");
     const today = new Date().toISOString().slice(0, 10);
 
-    if (lastFilled !== today) {
-      setIsSafetyOpen(true);
-    }
+    if (lastFilled !== today) setIsSafetyOpen(true);
   }, [user, token]);
 
   /* ================= UI HELPERS ================= */
@@ -132,7 +161,9 @@ console.log(typeof user,"sdds");
       </div>
     );
   }
+
   const activeJobId = jobs?.[0]?._id || null;
+
   return (
     <div className="max-w-5xl mx-auto space-y-6">
       <SafetyForm
@@ -170,7 +201,6 @@ console.log(typeof user,"sdds");
 
       <div className="space-y-6">
         {jobs.map((job) => {
-         
           const currentStatus =
             job.status?.[job.status.length - 1]?.stage || "pending";
 
@@ -264,10 +294,10 @@ console.log(typeof user,"sdds");
                   )}
                   {currentStatus === "offload" && (
                     <button
-                      onClick={() => updateStatus(job._id, "done")}
+                      onClick={() => openProofModal(job._id)}
                       className="flex-1 py-4 bg-slate-800 text-white rounded-2xl font-bold"
                     >
-                      Job Completed
+                      Complete Job
                     </button>
                   )}
                 </div>
@@ -276,6 +306,44 @@ console.log(typeof user,"sdds");
           );
         })}
       </div>
+
+      {/* PROOF MODAL */}
+      {activeJob && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center">
+          <div className="bg-white p-6 rounded-xl w-full max-w-md space-y-4">
+            <h3 className="font-bold text-lg">Job Completion</h3>
+
+            <textarea
+              placeholder="Driver notes..."
+              value={proofNotes}
+              onChange={(e) => setProofNotes(e.target.value)}
+              className="w-full border p-2 rounded"
+            />
+
+            <input
+              type="file"
+              multiple
+              onChange={(e) =>
+                setProofImages(Array.from(e.target.files || []))
+              }
+            />
+
+            <button
+              onClick={submitProof}
+              className="w-full bg-indigo-600 text-white py-2 rounded font-bold"
+            >
+              Submit Proof & Finish
+            </button>
+
+            <button
+              onClick={() => setActiveJob(null)}
+              className="w-full border py-2 rounded font-bold"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

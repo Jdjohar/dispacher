@@ -251,44 +251,40 @@ const ExcelJob = () => {
                   </td>
 
                   <td className="px-6 py-4 text-xs">
+                  <div>Customer Name: <span className="font-normal">{job.customer || "-"}</span></div>
                     {job.size}FT • {job.weight}KG • DG: {job.dg}
                   </td>
 
                   <td className="px-6 py-4">
-                    {job.assignedTo ? (
-                      <span className="px-3 py-1 bg-emerald-600 text-white rounded-full text-xs font-bold">
-                        Assigned: {job.assignedTo.username}
-                        {console.log(job, "sddsd 2")}
+                   
+                  <div className="flex gap-2 items-center">
+  <select
+    value={assignments[job._id] || job.assignedTo?._id || ""}
+    onChange={(e) =>
+      setAssignments({
+        ...assignments,
+        [job._id]: e.target.value,
+      })
+    }
+    className="border rounded px-2 py-1 text-xs"
+  >
+    <option value="">Select Driver</option>
+    {drivers.map((d) => (
+      <option key={d._id} value={d._id}>
+        {d.username} ({d.userMainId})
+      </option>
+    ))}
+  </select>
 
-                      </span>
-                    ) : (
-                      <div className="flex gap-2">
-                        <select
-                          value={assignments[job._id] || ""}
-                          onChange={(e) =>
-                            setAssignments({
-                              ...assignments,
-                              [job._id]: e.target.value,
-                            })
-                          }
-                          className="border rounded px-2 py-1 text-xs"
-                        >
-                          <option value="">Select Driver</option>
-                          {drivers.map((d) => (
-                            <option key={d._id} value={d._id}>
-                            {d.username} ({d.userMainId})
-                          </option>
-                          ))}
-                        </select>
-                        {console.log(job, "Job ID")}
-                        <button
-                          onClick={() => handleAssign(job._id)}
-                          className="px-3 bg-slate-800 text-white rounded text-xs font-bold"
-                        >
-                          Assign
-                        </button>
-                      </div>
-                    )}
+  <button
+    onClick={() => handleAssign(job._id)}
+    className="px-3 bg-slate-800 text-white rounded text-xs font-bold"
+  >
+    {job.assignedTo ? "Reassign" : "Assign"}
+  </button>
+</div>
+
+                   
                   </td>
                 </tr>
               ))}

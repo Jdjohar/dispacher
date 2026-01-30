@@ -8,7 +8,7 @@ const ContainerJob = () => {
 
   const API_BASE = import.meta.env.VITE_API_URL || "https://dispacher-nu.vercel.app";
   const token = localStorage.getItem("token");
-  console.log(user,"user");
+
   const getContainerJobs = async (userId) => {
     setLoading(true);
     try {
@@ -24,8 +24,7 @@ const ContainerJob = () => {
       if (!res.ok) throw new Error("Failed to fetch jobs");
 
       const result = await res.json();
-      console.log(result,"res sd");
-      // ✅ SUPPORT BOTH API SHAPES (array or wrapped object)
+
       const jobs = Array.isArray(result)
         ? result
         : Array.isArray(result?.totaljobs)
@@ -41,7 +40,18 @@ const ContainerJob = () => {
       setLoading(false);
     }
   };
-
+  const formatNZDate = (date) => {
+    if (!date) return "-";
+    return new Date(date).toLocaleString("en-NZ", {
+      timeZone: "Pacific/Auckland",
+      year: "numeric",
+      month: "short",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  };
+  
   useEffect(() => {
     if (!user?.userId || !token) {
       setLoading(false);
@@ -50,8 +60,6 @@ const ContainerJob = () => {
 
     getContainerJobs(user.userId);
   }, [user?.userId, token]);
-
-  /* ================= RENDER ================= */
 
   if (loading) {
     return (
@@ -86,7 +94,9 @@ const ContainerJob = () => {
           {/* Job Info */}
           <div className="grid md:grid-cols-2 gap-6 mt-4 text-sm">
             <div className="space-y-1">
-              <div>Start Date: <span className="font-normal">{job.jobStart || "-"}</span></div>
+            <div>Customer: <span className="font-normal">{job.customer || "-"}</span></div>
+
+            <div>Start Date: <span className="font-normal">{formatNZDate(job.jobStart)}</span></div>
               <div>PIN: <span className="font-normal">{job.pin}</span></div>
               <div>Commodity Code: <span className="font-normal">{job.commodityCode}</span></div>
               <div>Slot: <span className="font-normal">{job.slot}</span></div>
@@ -112,7 +122,7 @@ const ContainerJob = () => {
             </div>
           )}
 
-          {/* Status Timeline */}
+          {/* STATUS TIMELINE */}
           <div className="mt-4 bg-indigo-500 text-white rounded-xl p-3 text-sm">
             <div className="font-bold text-center mb-2">Status Timeline</div>
             <div className="flex flex-wrap gap-3">
@@ -130,6 +140,47 @@ const ContainerJob = () => {
               )}
             </div>
           </div>
+
+          {/* PROOF SECTION */}
+          {job.proof && (
+            <div className="mt-6 border-t pt-4">
+              <div className="font-bold text-sm mb-2">
+                Driver Proof
+              </div>
+
+              {job.proof.submittedAt && (
+                <div className="text-xs text-slate-500 mb-2">
+                  Submitted: {new Date(job.proof.submittedAt).toLocaleString()}
+                </div>
+              )}
+
+              {job.proof.notes && (
+                <div className="mb-3 text-sm">
+                  <span className="font-semibold">Notes:</span>
+                  <p>{job.proof.notes}</p>
+                </div>
+              )}
+
+              {job.proof.images?.length > 0 && (
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                  {job.proof.images.map((img, i) => (
+                    <a
+                      key={i}
+                      href={img}
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      <img
+                        src={img}
+                        alt="Proof"
+                        className="w-full h-32 object-cover rounded-lg border hover:opacity-80"
+                      />
+                    </a>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
         </div>
       ))}
     </div>

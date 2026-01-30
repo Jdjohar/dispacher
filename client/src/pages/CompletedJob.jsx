@@ -7,6 +7,19 @@ const CompletedJob = () => {
   const API_BASE = import.meta.env.VITE_API_URL || "https://dispacher-nu.vercel.app";
   const token = localStorage.getItem("token");
 
+
+  const formatNZDate = (date) => {
+    if (!date) return "-";
+    return new Date(date).toLocaleString("en-NZ", {
+      timeZone: "Pacific/Auckland",
+      year: "numeric",
+      month: "short",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  };
+  
   const fetchCompletedJobs = async () => {
     try {
       const res = await fetch(`${API_BASE}/api/jobs/completed`, {
@@ -20,7 +33,7 @@ const CompletedJob = () => {
       }
 
       const data = await res.json();
-      setCompletedJobs(data); // backend returns array
+      setCompletedJobs(data);
     } catch (error) {
       console.error("Fetch completed jobs error:", error);
     } finally {
@@ -42,7 +55,6 @@ const CompletedJob = () => {
 
   return (
     <div className="space-y-6 max-w-6xl mx-auto px-4">
-      {/* Header */}
       <div className="flex items-center justify-between">
         <h2 className="text-2xl font-bold text-slate-800">
           Job History Archive
@@ -52,7 +64,6 @@ const CompletedJob = () => {
         </span>
       </div>
 
-      {/* Jobs Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {completedJobs.map((job) => (
           <div
@@ -81,7 +92,7 @@ const CompletedJob = () => {
             </div>
 
             {/* Job Info */}
-            <div className="space-y-3 mb-6 text-sm">
+            <div className="space-y-3 mb-4 text-sm">
               <div className="flex justify-between">
                 <span className="text-slate-500">Pickup</span>
                 <span className="font-semibold">{job.uplift || "-"}</span>
@@ -102,6 +113,37 @@ const CompletedJob = () => {
               </div>
             </div>
 
+            {/* PROOF SECTION */}
+            {job.proof && (
+              <div className="mb-4 p-3 bg-slate-50 rounded-xl">
+                <p className="text-xs font-bold text-slate-500 mb-1">
+                  Driver Notes
+                </p>
+                <p className="text-sm text-slate-700 mb-2">
+                  {job.proof.notes || "No notes"}
+                </p>
+
+                {job.proof.images && job.proof.images.length > 0 && (
+                  <div className="grid grid-cols-3 gap-2">
+                    {job.proof.images.map((img, i) => (
+                      <a
+                        key={i}
+                        href={img}
+                        target="_blank"
+                        rel="noreferrer"
+                      >
+                        <img
+                          src={img}
+                          alt="Proof"
+                          className="h-20 w-full object-cover rounded border"
+                        />
+                      </a>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
             {/* Footer */}
             <div className="pt-4 border-t flex justify-between items-center">
               <div className="flex gap-2">
@@ -116,17 +158,14 @@ const CompletedJob = () => {
                   </span>
                 )}
               </div>
-{console.log(job, "dscsd sdcsd"
-)
-}
+
               <span className="text-[10px] font-bold text-indigo-600 uppercase">
-              Driver: {job.assignedTo?.username || "N/A"}
+                Driver: {job.assignedTo?.username || "N/A"}
               </span>
             </div>
           </div>
         ))}
 
-        {/* Empty */}
         {completedJobs.length === 0 && (
           <div className="col-span-full py-20 text-center bg-white rounded-3xl border border-dashed">
             <p className="text-slate-400 font-medium">

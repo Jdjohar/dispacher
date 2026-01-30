@@ -25,7 +25,7 @@ const crypto = require("crypto");
  ************************************************/
 const app = express();
 const PORT = process.env.PORT || 10000;
-  
+
 /************************************************
  * MIDDLEWARE
  ************************************************/
@@ -433,8 +433,8 @@ app.get('/api/reports/jobs/date/:date', auth, role(['admin', 'dispatcher']), asy
 /************************************************
  * START SERVER
  ************************************************/
-app.listen(PORT, () => {
-  console.log(`🚀 Server running on port ${PORT}`);
-});
+// app.listen(PORT, () => {
+//   console.log(`🚀 Server running on port ${PORT}`);
+// });
 
 module.exports = app;

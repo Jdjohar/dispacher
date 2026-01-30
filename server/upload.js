@@ -1,19 +1,22 @@
 const express = require("express");
 const router = express.Router();
-const cloudinary = require("./config/cloudinary");
+const cloudinary = require("../config/cloudinary");
 const multer = require("multer");
-const upload = multer({ dest: "uploads/" });
-const { auth } = require("./middlewares/auth");
+const upload = multer({ storage: multer.memoryStorage() });
+const { auth } = require("../middleware/auth");
 
 router.post("/", auth, upload.array("images"), async (req, res) => {
   try {
     const urls = [];
 
     for (const file of req.files) {
-      const result = await cloudinary.uploader.upload(file.path, {
-        folder: "job-proofs",
-      });
-      urls.push(result.secure_url);
+      const result = await cloudinary.uploader.upload_stream(
+        { folder: "job-proofs" },
+        (error, result) => {
+          if (error) throw error;
+          urls.push(result.secure_url);
+        }
+      ).end(file.buffer);
     }
 
     res.json({ urls });

@@ -454,8 +454,8 @@ app.get('/api/reports/jobs/date/:date', auth, role(['admin', 'dispatcher']), asy
 /************************************************
  * START SERVER
  ************************************************/
-app.listen(PORT, () => {
-  console.log(`🚀 Server running on port ${PORT}`);
-});
+// app.listen(PORT, () => {
+//   console.log(`🚀 Server running on port ${PORT}`);
+// });
 
 module.exports = app;

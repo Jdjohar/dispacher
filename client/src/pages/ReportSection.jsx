@@ -15,19 +15,28 @@ const ReportSection = () => {
 
     setIsLoading(true);
     try {
-      const res = await fetch(
-        `${API_BASE}/api/reports/jobs?from=${fromDate}&to=${toDate}`,
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        }
-      );
+      const res = await fetch(`${API_BASE}/api/jobs`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
 
-      if (!res.ok) throw new Error("Failed to fetch reports");
+      if (!res.ok) throw new Error("Failed to fetch jobs");
 
       const data = await res.json();
-      setReportData(Array.isArray(data) ? data : []);
+
+      const from = new Date(fromDate);
+      const to = new Date(toDate);
+      to.setHours(23, 59, 59, 999);
+
+      const completedJobs = data.filter((job) => {
+        const lastStage =
+          job.status?.[job.status.length - 1]?.stage === "offload";
+        const completedAt = new Date(job.updatedAt);
+        return lastStage && completedAt >= from && completedAt <= to;
+      });
+
+      setReportData(completedJobs);
     } catch (err) {
       console.error("Report fetch error:", err);
       setReportData([]);
@@ -41,19 +50,19 @@ const ReportSection = () => {
     if (!reportData.length) return;
 
     const headers =
-      "Completed Date,Uplift,Offload,Size,Container,Release,Driver\n";
+      "Completed Date,Job Number,Customer,Uplift,Offload,Size,Container,Release,Driver\n";
 
     const rows = reportData
-      .map(
-        (j) =>
-          `"${new Date(j.updatedAt).toLocaleDateString()}","${
-            j.uplift || "-"
-          }","${j.offload || "-"}","${j.size || "-"}","${
-            j.containerNumber || "N/A"
-          }","${j.release || "N/A"}","${
-            j.assignedTo?.username || "N/A"
-          }"`
-      )
+      .map((j) => {
+        const date = new Date(j.updatedAt).toLocaleDateString();
+        return `"${date}","${j.jobNumber || ""}","${j.customer || ""}","${
+          j.uplift || ""
+        }","${j.offload || ""}","${j.size || ""}","${
+          j.containerNumber || "N/A"
+        }","${j.release || "N/A"}","${
+          j.assignedTo?.username || "Unassigned"
+        }"`;
+      })
       .join("\n");
 
     const blob = new Blob([headers + rows], { type: "text/csv" });
@@ -109,6 +118,8 @@ const ReportSection = () => {
             <thead className="bg-slate-50 border-b">
               <tr>
                 <th className="px-6 py-4 text-xs font-bold">Date</th>
+                <th className="px-6 py-4 text-xs font-bold">Job #</th>
+                <th className="px-6 py-4 text-xs font-bold">Customer</th>
                 <th className="px-6 py-4 text-xs font-bold">Uplift</th>
                 <th className="px-6 py-4 text-xs font-bold">Offload</th>
                 <th className="px-6 py-4 text-xs font-bold text-center">Size</th>
@@ -124,9 +135,13 @@ const ReportSection = () => {
                   <td className="px-6 py-4">
                     {new Date(job.updatedAt).toLocaleDateString()}
                   </td>
+                  <td className="px-6 py-4">{job.jobNumber}</td>
+                  <td className="px-6 py-4">{job.customer}</td>
                   <td className="px-6 py-4">{job.uplift}</td>
                   <td className="px-6 py-4">{job.offload}</td>
-                  <td className="px-6 py-4 text-center">{job.size} FT</td>
+                  <td className="px-6 py-4 text-center">
+                    {job.size} FT
+                  </td>
                   <td className="px-6 py-4">
                     {job.containerNumber || "N/A"}
                   </td>
@@ -139,7 +154,7 @@ const ReportSection = () => {
 
               {!isLoading && reportData.length === 0 && (
                 <tr>
-                  <td colSpan={7} className="py-16 text-center text-slate-400">
+                  <td colSpan={9} className="py-16 text-center text-slate-400">
                     No completed jobs found for this date range.
                   </td>
                 </tr>

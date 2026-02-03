@@ -74,7 +74,11 @@ const ExcelJob = () => {
       console.log(driversData,"driversData");
       
 
-      setJobs(jobsData);
+      const sorted = jobsData.sort(
+        (a, b) => b._id.localeCompare(a._id)
+      );
+      
+      setJobs(sorted);
       setDrivers(driversData.filter((d) => d.userMainId));
     } catch (err) {
       console.error("FETCH ERROR:", err);
@@ -147,15 +151,35 @@ const ExcelJob = () => {
   ================================ */
   const exportCSV = () => {
     const headers =
-      "Job Date,PIN,Slot,Size,DG,Uplift,Offload,Weight,Container,Release,Driver\n";
-
-    const rows = jobs
-      .map(
-        (j) =>
-          `${j.jobStart},${j.pin},${j.slot},${j.size},${j.dg},${j.uplift},${j.offload},${j.weight},${j.containerNumber || ""},${j.release || ""},${j.assignedTo?.username || "Unassigned"}`
-      )
+      "Created At,Job Number,Customer,Job Date,PIN,Slot,Doors,Size,Weight,DG,Commodity Code,Uplift,Offload,Container,Release,Driver,Instructions\n";
+  
+    const rows = [...jobs]
+      .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
+      .map((j) => {
+        const driver = j.assignedTo?.username || "Unassigned";
+  
+        return [
+          j.createdAt || "",
+          j.jobNumber || "",
+          j.customer || "",
+          j.jobStart || "",
+          j.pin || "",
+          j.slot || "",
+          j.doors || "",
+          j.size || "",
+          j.weight || "",
+          j.dg ? "Yes" : "No",
+          j.commodityCode || "",
+          j.uplift || "",
+          j.offload || "",
+          j.containerNumber || "",
+          j.release || "",
+          driver,
+          j.instructions || ""
+        ].join(",");
+      })
       .join("\n");
-
+  
     const blob = new Blob([headers + rows], { type: "text/csv" });
     const url = window.URL.createObjectURL(blob);
     const a = document.createElement("a");
@@ -163,6 +187,9 @@ const ExcelJob = () => {
     a.download = "jobs-export.csv";
     a.click();
   };
+  
+  
+  
 
   /* ===============================
      HELPERS

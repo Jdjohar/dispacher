@@ -29,8 +29,19 @@ const TabButton = ({ active, children, onClick }) => (
   </button>
 );
 
-const UserCard = ({ user }) => (
-  <div className="group bg-slate-50 p-6 rounded-3xl hover:bg-white hover:shadow-xl transition-all border hover:border-indigo-100">
+
+
+const UserCard = ({ user, onDelete }) => (
+  <div className="group bg-slate-50 p-6 rounded-3xl hover:bg-white hover:shadow-xl transition-all border hover:border-indigo-100 relative">
+    {/* DELETE BUTTON */}
+    <button
+      onClick={() => onDelete(user._id)}
+      className="absolute top-3 right-3 text-rose-600 hover:text-rose-800 font-bold text-sm"
+      title="Delete user"
+    >
+      ✕
+    </button>
+
     <div className="flex justify-between mb-4">
       <div className="w-12 h-12 rounded-2xl bg-white flex items-center justify-center text-xl font-bold text-indigo-600 group-hover:bg-indigo-600 group-hover:text-white transition">
         {user.username?.charAt(0).toUpperCase()}
@@ -50,6 +61,7 @@ const UserCard = ({ user }) => (
     )}
   </div>
 );
+
 
 const EmptyState = () => (
   <div className="col-span-full py-16 text-center text-slate-400">
@@ -91,6 +103,33 @@ const AdminDashPage = () => {
     }
   };
 
+  const handleDeleteUser = async (userId) => {
+    const confirm = window.confirm(
+      "Are you sure you want to delete this user? This cannot be undone."
+    );
+  
+    if (!confirm) return;
+  
+    try {
+      const token = localStorage.getItem("token");
+  
+      const res = await fetch(`${API_BASE}/api/users/${userId}`, {
+        method: "DELETE",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+  
+      if (!res.ok) throw new Error("Delete failed");
+  
+      // remove from UI instantly
+      setUsers((prev) => prev.filter((u) => u._id !== userId));
+    } catch (err) {
+      console.error("Delete user error:", err);
+      alert("Failed to delete user");
+    }
+  };
+  
   useEffect(() => {
     fetchAllUsers();
   }, []);
@@ -151,7 +190,11 @@ const AdminDashPage = () => {
                   ? containerUsers
                   : dispatcherUsers
                 ).map((user) => (
-                  <UserCard key={user._id} user={user} />
+                  <UserCard
+  key={user._id}
+  user={user}
+  onDelete={handleDeleteUser}
+/>
                 ))}
 
                 {(selectedTab === "container"

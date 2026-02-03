@@ -286,6 +286,27 @@ app.put('/api/jobs/:id', auth, role(['admin', 'dispatcher']), async (req, res) =
   res.json(await Job.findByIdAndUpdate(req.params.id, req.body, { new: true }));
 });
 
+app.put("/api/jobs/:id/container", auth, async (req, res) => {
+  try {
+    const { containerNumber } = req.body;
+
+    if (!containerNumber) {
+      return res.status(400).json({ message: "Container required" });
+    }
+
+    const job = await Job.findById(req.params.id);
+    if (!job) return res.status(404).json({ message: "Job not found" });
+
+    job.containerNumber = containerNumber;
+    await job.save();
+
+    res.json(job);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+
 app.put('/api/jobs/:id/assign', auth, role(['admin', 'dispatcher']), async (req, res) => {
   const { userId } = req.body;
 
@@ -433,8 +454,8 @@ app.get('/api/reports/jobs/date/:date', auth, role(['admin', 'dispatcher']), asy
 /************************************************
  * START SERVER
  ************************************************/
-// app.listen(PORT, () => {
-//   console.log(`🚀 Server running on port ${PORT}`);
-// });
+app.listen(PORT, () => {
+  console.log(`🚀 Server running on port ${PORT}`);
+});
 
 module.exports = app;

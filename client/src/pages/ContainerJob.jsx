@@ -79,6 +79,8 @@ const ContainerJob = () => {
 
   return (
     <div className="m-5 space-y-10">
+      {console.log(completedJobs,"completedJobs")}
+      
       {completedJobs.map((job) => (
         <div
           key={job._id}
@@ -153,7 +155,7 @@ const ContainerJob = () => {
                   Submitted: {new Date(job.proof.submittedAt).toLocaleString()}
                 </div>
               )}
-
+{}
               {job.proof.notes && (
                 <div className="mb-3 text-sm">
                   <span className="font-semibold">Notes:</span>

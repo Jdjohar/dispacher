@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-
+import Select from "react-select";
 const CreateJob = () => {
   const navigate = useNavigate();
 
@@ -39,8 +39,12 @@ const CreateJob = () => {
   const [doors, setDoors] = useState("");
   const [commodityCode, setCommodityCode] = useState("");
   const [instructions, setInstructions] = useState("");
-
   const [addresses, setAddresses] = useState([]);
+  const addressOptions = addresses.map(a => ({
+    value: a.address,
+    label: a.address
+  }));
+
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [message, setMessage] = useState(null);
 
@@ -164,7 +168,7 @@ console.log(payload,"payload");
 
           {/* LOCATIONS */}
           <div className="grid md:grid-cols-2 gap-6">
-            <select
+            {/* <select
               required
               value={uplift}
               onChange={(e) => setUplift(e.target.value)}
@@ -176,9 +180,19 @@ console.log(payload,"payload");
                   {a.address}
                 </option>
               ))}
-            </select>
+            </select> */}
+            <Select
+  options={addressOptions}
+  value={addressOptions.find(o => o.value === offload)}
+  onChange={(opt) => setUplift(opt.value)}
+  placeholder="Search offload address..."
+  isClearable
+/>
 
-            <select
+
+            
+
+            {/* <select
               required
               value={offload}
               onChange={(e) => setOffload(e.target.value)}
@@ -190,7 +204,15 @@ console.log(payload,"payload");
                   {a.address}
                 </option>
               ))}
-            </select>
+            </select> */}
+            <Select
+  options={addressOptions}
+  value={addressOptions.find(o => o.value === offload)}
+  onChange={(opt) => setOffload(opt.value)}
+  placeholder="Search offload address..."
+  isClearable
+/>
+
           </div>
 
           {/* DATE & SIZE */}

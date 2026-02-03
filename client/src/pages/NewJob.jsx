@@ -13,7 +13,7 @@ const NewJob = () => {
   const [addresses, setAddresses] = useState([]);
   const [isSafetyOpen, setIsSafetyOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
-
+  const [containerNumber, setContainerNumber] = useState("");
   // proof
   const [proofNotes, setProofNotes] = useState("");
   const [proofImages, setProofImages] = useState([]);
@@ -35,6 +35,17 @@ const NewJob = () => {
     } finally {
       setIsLoading(false);
     }
+  };
+  const formatNZDate = (date) => {
+    if (!date) return "-";
+    return new Date(date).toLocaleString("en-NZ", {
+      timeZone: "Pacific/Auckland",
+      year: "numeric",
+      month: "short",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
   };
 
   /* ================= FETCH ADDRESSES ================= */
@@ -83,38 +94,64 @@ const NewJob = () => {
       alert("Please add notes or at least one image");
       return;
     }
-
+  
     try {
+      // 1. Upload images first
       const formData = new FormData();
       for (let file of proofImages) {
         formData.append("images", file);
       }
-
+  
       const uploadRes = await fetch(`${API_BASE}/api/upload`, {
         method: "POST",
         headers: { Authorization: `Bearer ${token}` },
         body: formData,
       });
-
+  
       if (!uploadRes.ok) {
         alert("Image upload failed");
         return;
       }
-
-      const { urls } = await uploadRes.json();
-
-      await fetch(`${API_BASE}/api/jobs/${activeJob}/proof`, {
-        method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          notes: proofNotes,
-          images: urls,
-        }),
-      });
-
+  
+      const uploadJson = await uploadRes.json();
+      console.log("UPLOAD RESPONSE:", uploadJson);
+  
+      // 2. Extract URLs safely (works with ANY backend format)
+      let urls = [];
+  
+      if (Array.isArray(uploadJson)) urls = uploadJson;
+      else if (Array.isArray(uploadJson.urls)) urls = uploadJson.urls;
+      else if (Array.isArray(uploadJson.files)) urls = uploadJson.files;
+      else if (Array.isArray(uploadJson.paths)) urls = uploadJson.paths;
+      else if (uploadJson.url) urls = [uploadJson.url];
+  
+      if (!urls.length && proofImages.length) {
+        alert("Upload failed: backend returned no image URLs");
+        return;
+      }
+  
+      // 3. Save proof to job
+      const proofRes = await fetch(
+        `${API_BASE}/api/jobs/${activeJob}/proof`,
+        {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            notes: proofNotes,
+            images: urls,
+          }),
+        }
+      );
+  
+      if (!proofRes.ok) {
+        alert("Failed to save proof");
+        return;
+      }
+  
+      // 4. Reset UI
       setActiveJob(null);
       setProofNotes("");
       setProofImages([]);
@@ -124,6 +161,34 @@ const NewJob = () => {
       alert("Something went wrong");
     }
   };
+  
+ /* ================= SAVE CONTAINER ================= */
+ const saveContainerNumber = async (jobId, value) => {
+  if (!value || value.trim().length < 4) {
+    alert("Enter valid container number");
+    return;
+  }
+
+  try {
+    const res = await fetch(`${API_BASE}/api/jobs/${jobId}/container`, {
+      method: "PUT",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({ containerNumber: value }),
+    });
+
+    if (!res.ok) throw new Error("Failed");
+
+    fetchJobs(user.userId);
+  } catch (err) {
+    console.error(err);
+    alert("Failed to save container");
+  }
+};
+  
+  
 
   /* ================= EFFECT ================= */
   useEffect(() => {
@@ -216,7 +281,15 @@ const NewJob = () => {
                       Job ID
                     </p>
                     <p className="text-lg font-bold">
-                      #{job._id.slice(-6).toUpperCase()}
+                      #{job.jobNumber}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-xs font-bold text-slate-400 uppercase">
+                      Customer Name
+                    </p>
+                    <p className="text-lg font-bold">
+                      #{job.customer}
                     </p>
                   </div>
 
@@ -242,16 +315,45 @@ const NewJob = () => {
                     <p className="text-xs font-bold text-slate-400">
                       Container
                     </p>
-                    <p className="font-bold text-indigo-600">
-                      {job.containerNumber || "PENDING"}
-                    </p>
+                    {job.containerNumber ? (
+                <span className="text-indigo-600 font-bold">
+                  {job.containerNumber}
+                </span>
+              ) : (
+                <div className="flex gap-2 mt-2">
+                  <input
+                    value={job._tempContainer}
+                    onChange={(e) =>
+                      setJobs((prev) =>
+                        prev.map((j) =>
+                          j._id === job._id
+                            ? { ...j, _tempContainer: e.target.value }
+                            : j
+                        )
+                      )
+                    }
+                    placeholder="Enter Container"
+                    className="border px-2 py-1 rounded"
+                  />
+                  <button
+                    onClick={() =>
+                      saveContainerNumber(job._id, job._tempContainer)
+                    }
+                    className="bg-indigo-600 text-white px-3 rounded"
+                  >
+                    Save
+                  </button>
+                </div>
+              )}
+
                   </div>
                 </div>
 
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+                  {console.log(job, "job sdsd")}
                   <div>
                     <p className="text-xs text-slate-400">Start</p>
-                    <p>{job.jobStart}</p>
+                    <p>{formatNZDate(job.jobStart)}</p>
                   </div>
                   <div>
                     <p className="text-xs text-slate-400">PIN</p>
@@ -266,6 +368,24 @@ const NewJob = () => {
                     <p>{job.weight} kg</p>
                   </div>
                 </div>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+                  <div>
+                    <p className="text-xs text-slate-400">VBS Slot</p>
+                    <p>{job.slot}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-slate-400">Door</p>
+                    <p className="font-mono">{job.doors}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-slate-400">C Code</p>
+                    <p>{job.commodityCode}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-slate-400">DG</p>
+                    <p>{job.dg ? "Yes" : "No"}</p>
+                  </div>
+                </div>
 
                 <div className="flex gap-4">
                   {currentStatus === "pending" && (
@@ -278,6 +398,7 @@ const NewJob = () => {
                   )}
                   {currentStatus === "accept" && (
                     <button
+                    disabled={!job.containerNumber}
                       onClick={() => updateStatus(job._id, "uplift")}
                       className="flex-1 py-4 bg-indigo-600 text-white rounded-2xl font-bold"
                     >
@@ -308,7 +429,7 @@ const NewJob = () => {
       </div>
 
       {/* PROOF MODAL */}
-      {activeJob && (
+         {activeJob && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center">
           <div className="bg-white p-6 rounded-xl w-full max-w-md space-y-4">
             <h3 className="font-bold text-lg">Job Completion</h3>

@@ -7,16 +7,25 @@ const { auth } = require("./middlewares/auth");
 
 router.post("/", auth, upload.array("images"), async (req, res) => {
   try {
+    const uploadToCloudinary = (fileBuffer) => {
+      return new Promise((resolve, reject) => {
+        const stream = cloudinary.uploader.upload_stream(
+          { folder: "job-proofs" },
+          (error, result) => {
+            if (error) reject(error);
+            else resolve(result.secure_url);
+          }
+        );
+
+        stream.end(fileBuffer);
+      });
+    };
+
     const urls = [];
 
     for (const file of req.files) {
-      const result = await cloudinary.uploader.upload_stream(
-        { folder: "job-proofs" },
-        (error, result) => {
-          if (error) throw error;
-          urls.push(result.secure_url);
-        }
-      ).end(file.buffer);
+      const url = await uploadToCloudinary(file.buffer);
+      urls.push(url);
     }
 
     res.json({ urls });
@@ -25,5 +34,6 @@ router.post("/", auth, upload.array("images"), async (req, res) => {
     res.status(500).json({ message: "Upload failed" });
   }
 });
+
 
 module.exports = router;

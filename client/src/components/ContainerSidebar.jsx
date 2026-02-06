@@ -4,7 +4,7 @@ import { useAuth } from '../context/AuthContext'
 import close from '../assets/close.svg';
 import open from '../assets/open.svg';
 import image1 from '../assets/image 1.png';
-
+import logo from '../assets/image 1.png'
 const ContainerSidebar = () => {
     const {logout} = useAuth();
     const location = useLocation();
@@ -41,7 +41,8 @@ const ContainerSidebar = () => {
         <div>
           <img src={image1} alt="logo" />
         </div>
-        <h1 className='font-bold mt-2 mb-3'>CONTAINER</h1>
+        <img src={logo} className='' />
+        {/* <h1 className='font-bold mt-2 mb-3'>CONTAINER</h1> */}
         <hr/>
       <Link
         to="/container-dashboard"

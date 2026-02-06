@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { useAuth } from "../context/AuthContext";
 import SafetyForm from "../components/SafetyForm";
-
+import logo from '../assets/image 1.png'
 const API_BASE = import.meta.env.VITE_API_URL || "https://dispacher-nu.vercel.app";
 
 const NewJob = () => {
@@ -244,6 +244,8 @@ const NewJob = () => {
         options={addresses}
       />
 
+<img src={logo} className='m-auto d-block' />
+
       <div className="flex items-center justify-between">
         <h2 className="text-2xl font-bold text-slate-800">
           Current Assignments
@@ -384,6 +386,12 @@ const NewJob = () => {
                   <div>
                     <p className="text-xs text-slate-400">DG</p>
                     <p>{job.dg ? "Yes" : "No"}</p>
+                  </div>
+                </div>
+                <div className="grid mb-6">
+                  <div>
+                    <p className="text-xs text-slate-400">Instructions</p>
+                    <p>{job.instructions}</p>
                   </div>
                 </div>
 

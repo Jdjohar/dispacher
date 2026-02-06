@@ -47,6 +47,27 @@ const CreateJob = () => {
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [message, setMessage] = useState(null);
+  const [jobs, setJobs] = useState([]);
+  const [loadingJobs, setLoadingJobs] = useState(false);
+
+
+  const getJobStatus = (job) => {
+    const stage = job.status?.[job.status.length - 1]?.stage;
+
+    switch (stage) {
+      case "accept":
+        return { label: "Accepted", color: "bg-slate-100 text-slate-700" };
+      case "uplift":
+        return { label: "Uplift", color: "bg-blue-700 text-white" };
+      case "offload":
+        return { label: "Offload", color: "bg-orange-100 text-orange-700" };
+      case "done":
+        return { label: "Completed", color: "bg-emerald-100 text-emerald-700" };
+      default:
+        return { label: "Unknown", color: "bg-gray-100 text-gray-600" };
+    }
+  };
+
 
   /* ================= FETCH ADDRESSES ================= */
   useEffect(() => {
@@ -63,6 +84,39 @@ const CreateJob = () => {
     };
     fetchAddresses();
   }, [API_BASE, token]);
+  /* ================= FETCH JOBS ================= */
+  useEffect(() => {
+    const fetchJobs = async () => {
+      try {
+        setLoadingJobs(true);
+
+        const [activeRes, completedRes] = await Promise.all([
+          fetch(`${API_BASE}/api/jobs`, {
+            headers: { Authorization: `Bearer ${token}` },
+          }),
+          fetch(`${API_BASE}/api/jobs/completed`, {
+            headers: { Authorization: `Bearer ${token}` },
+          }),
+        ]);
+
+        if (!activeRes.ok || !completedRes.ok) {
+          throw new Error("Failed to fetch jobs");
+        }
+
+        const activeJobs = await activeRes.json();
+        const completedJobs = await completedRes.json();
+
+        setJobs([...activeJobs, ...completedJobs]);
+      } catch (err) {
+        console.error(err);
+      } finally {
+        setLoadingJobs(false);
+      }
+    };
+
+    fetchJobs();
+  }, [API_BASE, token]);
+
 
   /* ================= SUBMIT ================= */
   const handleSubmit = async (e) => {
@@ -107,7 +161,7 @@ const CreateJob = () => {
       });
 
       if (!res.ok) throw new Error("Job creation failed");
-console.log(payload,"payload");
+      console.log(payload, "payload");
 
       setMessage({ type: "success", text: "Job created successfully" });
 
@@ -149,7 +203,7 @@ console.log(payload,"payload");
 
         <form onSubmit={handleSubmit} className="p-8 space-y-8">
 
-        <div className="grid md:grid-cols-3 gap-6">
+          <div className="grid md:grid-cols-3 gap-6">
             <input
               value={jobNumber}
               onChange={(e) => setjobNumber(e.target.value)}
@@ -162,7 +216,7 @@ console.log(payload,"payload");
               placeholder="Customer Name"
               className="px-4 py-3 rounded-xl border"
             />
-           
+
           </div>
 
 
@@ -182,15 +236,15 @@ console.log(payload,"payload");
               ))}
             </select> */}
             <Select
-  options={addressOptions}
-  value={addressOptions.find(o => o.value === offload)}
-  onChange={(opt) => setUplift(opt.value)}
-  placeholder="Search offload address..."
-  isClearable
-/>
+              options={addressOptions}
+              value={addressOptions.find(o => o.value === offload)}
+              onChange={(opt) => setUplift(opt.value)}
+              placeholder="Search offload address..."
+              isClearable
+            />
 
 
-            
+
 
             {/* <select
               required
@@ -206,12 +260,12 @@ console.log(payload,"payload");
               ))}
             </select> */}
             <Select
-  options={addressOptions}
-  value={addressOptions.find(o => o.value === offload)}
-  onChange={(opt) => setOffload(opt.value)}
-  placeholder="Search offload address..."
-  isClearable
-/>
+              options={addressOptions}
+              value={addressOptions.find(o => o.value === offload)}
+              onChange={(opt) => setOffload(opt.value)}
+              placeholder="Search offload address..."
+              isClearable
+            />
 
           </div>
 
@@ -240,22 +294,20 @@ console.log(payload,"payload");
             <button
               type="button"
               onClick={() => setIdType("release")}
-              className={`px-6 py-2 rounded-xl font-bold ${
-                idType === "release"
-                  ? "bg-indigo-600 text-white"
-                  : "border"
-              }`}
+              className={`px-6 py-2 rounded-xl font-bold ${idType === "release"
+                ? "bg-indigo-600 text-white"
+                : "border"
+                }`}
             >
               Release #
             </button>
             <button
               type="button"
               onClick={() => setIdType("container")}
-              className={`px-6 py-2 rounded-xl font-bold ${
-                idType === "container"
-                  ? "bg-indigo-600 text-white"
-                  : "border"
-              }`}
+              className={`px-6 py-2 rounded-xl font-bold ${idType === "container"
+                ? "bg-indigo-600 text-white"
+                : "border"
+                }`}
             >
               Container #
             </button>
@@ -344,11 +396,10 @@ console.log(payload,"payload");
 
           {message && (
             <div
-              className={`p-4 rounded-xl font-semibold ${
-                message.type === "success"
-                  ? "bg-emerald-50 text-emerald-700"
-                  : "bg-rose-50 text-rose-700"
-              }`}
+              className={`p-4 rounded-xl font-semibold ${message.type === "success"
+                ? "bg-emerald-50 text-emerald-700"
+                : "bg-rose-50 text-rose-700"
+                }`}
             >
               {message.text}
             </div>
@@ -361,6 +412,62 @@ console.log(payload,"payload");
             {isSubmitting ? "Creating..." : "Create Job"}
           </button>
         </form>
+
+        {/* ================= JOB STATUS TABLE ================= */}
+
+      </div>
+      <div className="bg-white rounded-3xl mt-5 border shadow-sm">
+        <div className="p-6 border-b">
+          <h3 className="text-xl font-bold">All Jobs Status</h3>
+        </div>
+
+        <div className="overflow-x-auto">
+          <table className="min-w-full text-sm">
+            <thead className="bg-slate-50 border-b">
+              <tr>
+                <th className="px-4 py-3 text-left">Job #</th>
+                <th className="px-4 py-3 text-left">Customer</th>
+                <th className="px-4 py-3 text-left">Driver</th>
+                <th className="px-4 py-3 text-left">Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              {loadingJobs && (
+                <tr>
+                  <td colSpan="4" className="px-4 py-6 text-center">Loading jobs...</td>
+                </tr>
+              )}
+
+              {!loadingJobs && jobs.map(job => (
+                <tr key={job._id} className="border-b">
+                  <td className="px-4 py-3">{job.jobNumber || "-"}</td>
+                  <td className="px-4 py-3">{job.customer || "-"}</td>
+                  <td className="px-4 py-3">{job.assignedTo?.username || "Unassigned"}</td>
+                  <td className="px-4 py-3">
+                    <span
+                      className={`px-3 py-1 rounded-full text-xs font-bold ${job.isCompleted
+                          ? "bg-emerald-100 text-emerald-700"
+                          : "text-amber-700"
+                        }`}
+                    >
+                      {(() => {
+                        const status = getJobStatus(job);
+                        return (
+                          <span
+                            className={`px-3 py-1 rounded-full text-xs font-bold ${status.color}`}
+                          >
+                            {status.label}
+                          </span>
+                        );
+                      })()}
+
+                    </span>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
   );

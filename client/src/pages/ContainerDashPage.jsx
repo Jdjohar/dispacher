@@ -1,6 +1,8 @@
 import React, { useEffect } from "react";
 import { Outlet, useLocation, Link, useNavigate } from "react-router-dom";
 import ContainerSidebar from "../components/ContainerSidebar";
+import logo from '../assets/image 1.png'
+
 
 const ContainerDashPage = () => {
   const location = useLocation();
@@ -48,6 +50,7 @@ const ContainerDashPage = () => {
 
       <div className="flex-1 p-8 bg-slate-50 min-h-screen">
         <div className="max-w-4xl mx-auto space-y-8">
+        <img src={logo} className='m-auto d-block' />
           {/* Welcome Card */}
           <div className="bg-indigo-600 rounded-3xl p-8 text-white shadow-xl shadow-indigo-100 relative overflow-hidden">
             <div className="relative z-10">

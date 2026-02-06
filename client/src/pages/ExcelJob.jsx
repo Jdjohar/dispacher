@@ -29,7 +29,6 @@ const ExcelJob = () => {
 
   const decoded = decodeToken(token);
 
-  /* 🔒 HARD ROLE GUARD */
   if (!["admin", "dispatcher"].includes(decoded?.userType)) {
     return (
       <div className="max-w-xl mx-auto mt-20 p-6 bg-rose-50 border border-rose-200 rounded-xl text-center">
@@ -37,7 +36,7 @@ const ExcelJob = () => {
           Access Restricted
         </h2>
         <p className="text-sm text-rose-700 mt-2">
-          Only Admin or Dispatcher can assign drivers.
+          Only Admin or Dispatcher can access this page.
         </p>
       </div>
     );
@@ -48,10 +47,15 @@ const ExcelJob = () => {
   ================================ */
   const [jobs, setJobs] = useState([]);
   const [drivers, setDrivers] = useState([]);
+  const [addresses, setAddresses] = useState([]);
   const [assignments, setAssignments] = useState({});
   const [pageNumber, setPageNumber] = useState(0);
   const [showAll, setShowAll] = useState(false);
   const [loading, setLoading] = useState(true);
+
+  // EDIT / DELETE
+  const [editJob, setEditJob] = useState(null);
+  const [editForm, setEditForm] = useState({});
 
   const jobsPerPage = 10;
 
@@ -60,29 +64,32 @@ const ExcelJob = () => {
   ================================ */
   const fetchData = async () => {
     try {
-      const [jobsRes, driversRes] = await Promise.all([
+      const [jobsRes, driversRes, addressRes] = await Promise.all([
         fetch(`${API_BASE}/api/jobs`, {
           headers: { Authorization: `Bearer ${token}` },
         }),
         fetch(`${API_BASE}/api/users/role/container`, {
           headers: { Authorization: `Bearer ${token}` },
         }),
+        fetch(`${API_BASE}/api/addresses`, {
+          headers: { Authorization: `Bearer ${token}` },
+        }),
       ]);
 
       const jobsData = await jobsRes.json();
       const driversData = await driversRes.json();
-      console.log(driversData,"driversData");
-      
+      const addressData = await addressRes.json();
 
-      const sorted = jobsData.sort(
-        (a, b) => b._id.localeCompare(a._id)
+      const sorted = jobsData.sort((a, b) =>
+        b._id.localeCompare(a._id)
       );
-      
+
       setJobs(sorted);
       setDrivers(driversData.filter((d) => d.userMainId));
+      setAddresses(addressData);
     } catch (err) {
       console.error("FETCH ERROR:", err);
-      alert("Failed to load jobs or drivers");
+      alert("Failed to load data");
     } finally {
       setLoading(false);
     }
@@ -91,23 +98,14 @@ const ExcelJob = () => {
   useEffect(() => {
     fetchData();
   }, []);
-  useEffect(() => {
-    console.log("ASSIGNMENTS STATE:", assignments);
-  }, [assignments]);
+
   /* ===============================
-     ASSIGN DRIVER (FIXED)
+     ASSIGN DRIVER
   ================================ */
   const handleAssign = async (jobId) => {
-    const userId = assignments[jobId]; // ✅ THIS IS THE SELECTED DRIVER ID
-  
-    console.log("JOB:", jobId);
-    console.log("ASSIGN DRIVER:", userId);
-  
-    if (!userId) {
-      alert("Select a driver first");
-      return;
-    }
-  
+    const userId = assignments[jobId];
+    if (!userId) return alert("Select a driver first");
+
     try {
       const res = await fetch(
         `${API_BASE}/api/jobs/${jobId}/assign`,
@@ -120,76 +118,93 @@ const ExcelJob = () => {
           body: JSON.stringify({ userId }),
         }
       );
-  
-      const data = await res.json();
 
-      console.log(data,"Data Assign");
-      
-  
-      if (!res.ok) {
-        console.error("ASSIGN FAILED:", data);
-        alert(data.message || "Assignment failed");
-        return;
-      }
-  
-      // Clear selection
+      if (!res.ok) throw new Error();
       setAssignments((prev) => {
-        const copy = { ...prev };
-        delete copy[jobId];
-        return copy;
+        const c = { ...prev };
+        delete c[jobId];
+        return c;
       });
-  
       fetchData();
-    } catch (err) {
-      console.error("NETWORK ERROR:", err);
-      alert("Server not reachable");
+    } catch {
+      alert("Assignment failed");
     }
   };
-  
+
   /* ===============================
-     CSV EXPORT
+     EDIT JOB
   ================================ */
-  const exportCSV = () => {
-    const headers =
-      "Created At,Job Number,Customer,Job Date,PIN,Slot,Doors,Size,Weight,DG,Commodity Code,Uplift,Offload,Container,Release,Driver,Instructions\n";
-  
-    const rows = [...jobs]
-      .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
-      .map((j) => {
-        const driver = j.assignedTo?.username || "Unassigned";
-  
-        return [
-          j.createdAt || "",
-          j.jobNumber || "",
-          j.customer || "",
-          j.jobStart || "",
-          j.pin || "",
-          j.slot || "",
-          j.doors || "",
-          j.size || "",
-          j.weight || "",
-          j.dg ? "Yes" : "No",
-          j.commodityCode || "",
-          j.uplift || "",
-          j.offload || "",
-          j.containerNumber || "",
-          j.release || "",
-          driver,
-          j.instructions || ""
-        ].join(",");
-      })
-      .join("\n");
-  
-    const blob = new Blob([headers + rows], { type: "text/csv" });
-    const url = window.URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = "jobs-export.csv";
-    a.click();
+  const openEditModal = (job) => {
+    setEditJob(job);
+    setEditForm({
+      jobNumber: job.jobNumber || "",
+      customer: job.customer || "",
+      uplift: job.uplift || "",
+      offload: job.offload || "",
+      jobStart: job.jobStart || "",
+      size: job.size || "20",
+      release: job.release || "",
+      containerNumber: job.containerNumber || "",
+      slot: job.slot || "",
+      pin: job.pin || "",
+      doors: job.doors || "",
+      weight: job.weight || "",
+      commodityCode: job.commodityCode || "",
+      dg: job.dg ? "true" : "false",
+      random: job.random || "",
+      instructions: job.instructions || "",
+    });
   };
-  
-  
-  
+
+  const handleUpdateJob = async () => {
+    try {
+      const payload = {
+        ...editForm,
+        dg: editForm.dg === "true",
+      };
+
+      const res = await fetch(
+        `${API_BASE}/api/jobs/${editJob._id}`,
+        {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify(payload),
+        }
+      );
+
+      if (!res.ok) throw new Error();
+
+      const updated = await res.json();
+      setJobs((prev) =>
+        prev.map((j) => (j._id === updated._id ? updated : j))
+      );
+      setEditJob(null);
+    } catch {
+      alert("Failed to update job");
+    }
+  };
+
+  /* ===============================
+     DELETE JOB
+  ================================ */
+  const handleDeleteJob = async (jobId) => {
+    if (!window.confirm("Delete this job permanently?")) return;
+
+    try {
+      const res = await fetch(`${API_BASE}/api/jobs/${jobId}`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      if (!res.ok) throw new Error();
+      setJobs((prev) => prev.filter((j) => j._id !== jobId));
+    } catch {
+      alert("Failed to delete job");
+    }
+  };
 
   /* ===============================
      HELPERS
@@ -199,7 +214,7 @@ const ExcelJob = () => {
     const diff =
       (new Date(job.jobStart) - new Date()) /
       (1000 * 60 * 60 * 24);
-    return diff <= 1 ? "bg-rose-50 text-rose-800" : "";
+    return diff <= 1 ? "bg-rose-50" : "";
   };
 
   /* ===============================
@@ -224,125 +239,187 @@ const ExcelJob = () => {
   ================================ */
   return (
     <div className="max-w-6xl mx-auto space-y-6">
-      {/* CONTROLS */}
-      <div className="flex justify-between flex-wrap gap-4">
-        <div className="flex gap-2">
-          <button
-            onClick={() => setShowAll(!showAll)}
-            className="px-4 py-2 border rounded-xl font-bold text-sm bg-white"
-          >
-            {showAll ? "Show Paginated" : "Show All"}
-          </button>
-
-          <button
-            onClick={exportCSV}
-            className="px-4 py-2 bg-indigo-600 text-white rounded-xl font-bold text-sm"
-          >
-            Export CSV
-          </button>
-        </div>
+      <div className="flex gap-2">
+        <button
+          onClick={() => setShowAll(!showAll)}
+          className="px-4 py-2 border rounded-xl font-bold text-sm"
+        >
+          {showAll ? "Show Paginated" : "Show All"}
+        </button>
       </div>
 
-      {/* TABLE */}
       <div className="bg-white rounded-3xl border shadow-sm overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="w-full text-left">
+          <table className="w-full text-left text-xs">
             <thead className="bg-slate-50 border-b">
               <tr>
-                <th className="px-6 py-4 text-xs font-bold">Date & PIN</th>
-                <th className="px-6 py-4 text-xs font-bold">Route</th>
-                <th className="px-6 py-4 text-xs font-bold">Details</th>
-                <th className="px-6 py-4 text-xs font-bold">Driver</th>
+                <th className="px-3 py-2">Job#</th>
+                <th className="px-3 py-2">Customer</th>
+                <th className="px-3 py-2">Uplift</th>
+                <th className="px-3 py-2">Offload</th>
+                <th className="px-3 py-2">Date</th>
+                <th className="px-3 py-2">FT</th>
+                <th className="px-3 py-2">Rel / Cont</th>
+                <th className="px-3 py-2">Slot</th>
+                <th className="px-3 py-2">PIN</th>
+                <th className="px-3 py-2">Doors</th>
+                <th className="px-3 py-2">Weight</th>
+                <th className="px-3 py-2">C-Code</th>
+                <th className="px-3 py-2">DG</th>
+                <th className="px-3 py-2">Random</th>
+                <th className="px-3 py-2">Driver</th>
+                <th className="px-3 py-2">Actions</th>
               </tr>
             </thead>
 
             <tbody>
               {currentJobs.map((job) => (
-                <tr
-                  key={job._id}
-                  className={`border-b ${urgencyClass(job)}`}
-                >
-                  <td className="px-6 py-4">
-                    <div className="font-bold">{job.jobStart}</div>
-                    <div className="text-xs text-slate-500">
-                      PIN: {job.pin}
+                <tr key={job._id} className={`border-b ${urgencyClass(job)}`}>
+                  <td className="px-3 py-2">{job.jobNumber || "—"}</td>
+                  <td className="px-3 py-2">{job.customer || "—"}</td>
+                  <td className="px-3 py-2">{job.uplift || "—"}</td>
+                  <td className="px-3 py-2">{job.offload || "—"}</td>
+                  <td className="px-3 py-2">
+                    {job.jobStart
+                      ? new Date(job.jobStart).toLocaleDateString()
+                      : "—"}
+                  </td>
+                  <td className="px-3 py-2">{job.size || "—"}</td>
+                  <td className="px-3 py-2">
+                    {job.release || job.containerNumber || "—"}
+                  </td>
+                  <td className="px-3 py-2">{job.slot || "—"}</td>
+                  <td className="px-3 py-2">{job.pin || "—"}</td>
+                  <td className="px-3 py-2">{job.doors || "—"}</td>
+                  <td className="px-3 py-2">{job.weight || "—"}</td>
+                  <td className="px-3 py-2">{job.commodityCode || "—"}</td>
+                  <td className="px-3 py-2">{job.dg ? "Yes" : "No"}</td>
+                  <td className="px-3 py-2">{job.random || "—"}</td>
+
+                  <td className="px-3 py-2">
+                    <div className="flex gap-2">
+                      <select
+                        value={assignments[job._id] || job.assignedTo?._id || ""}
+                        onChange={(e) =>
+                          setAssignments({
+                            ...assignments,
+                            [job._id]: e.target.value,
+                          })
+                        }
+                        className="border rounded px-2 py-1 text-xs"
+                      >
+                        <option value="">Select</option>
+                        {drivers.map((d) => (
+                          <option key={d._id} value={d._id}>
+                            {d.username} ({d.userMainId})
+                          </option>
+                        ))}
+                      </select>
+                      <button
+                        onClick={() => handleAssign(job._id)}
+                        className="px-2 bg-slate-800 text-white rounded text-xs"
+                      >
+                        Assign
+                      </button>
                     </div>
-                    <div className="text-xs text-slate-500">
-                      ID: {job._id}
-                    </div>
                   </td>
 
-                  <td className="px-6 py-4 text-xs">
-                    <div>{job.uplift}</div>
-                    <div>{job.offload}</div>
-                  </td>
-
-                  <td className="px-6 py-4 text-xs">
-                  <div>Customer Name: <span className="font-normal">{job.customer || "-"}</span></div>
-                    {job.size}FT • {job.weight}KG • DG: {job.dg}
-                  </td>
-
-                  <td className="px-6 py-4">
-                   
-                  <div className="flex gap-2 items-center">
-  <select
-    value={assignments[job._id] || job.assignedTo?._id || ""}
-    onChange={(e) =>
-      setAssignments({
-        ...assignments,
-        [job._id]: e.target.value,
-      })
-    }
-    className="border rounded px-2 py-1 text-xs"
-  >
-    <option value="">Select Driver</option>
-    {drivers.map((d) => (
-      <option key={d._id} value={d._id}>
-        {d.username} ({d.userMainId})
-      </option>
-    ))}
-  </select>
-
-  <button
-    onClick={() => handleAssign(job._id)}
-    className="px-3 bg-slate-800 text-white rounded text-xs font-bold"
-  >
-    {job.assignedTo ? "Reassign" : "Assign"}
-  </button>
-</div>
-
-                   
+                  <td className="px-3 py-2 flex gap-1">
+                    <button
+                      onClick={() => openEditModal(job)}
+                      className="px-2 py-1 bg-indigo-600 text-white rounded text-xs"
+                    >
+                      Edit
+                    </button>
+                    <button
+                      onClick={() => handleDeleteJob(job._id)}
+                      className="px-2 py-1 bg-rose-600 text-white rounded text-xs"
+                    >
+                      Delete
+                    </button>
                   </td>
                 </tr>
               ))}
-
-              {jobs.length === 0 && (
-                <tr>
-                  <td colSpan="4" className="py-10 text-center text-slate-400">
-                    No jobs found
-                  </td>
-                </tr>
-              )}
             </tbody>
           </table>
         </div>
-
-        {!showAll && pageCount > 1 && (
-          <div className="p-6 border-t">
-            <ReactPaginate
-              previousLabel="Prev"
-              nextLabel="Next"
-              pageCount={pageCount}
-              onPageChange={({ selected }) =>
-                setPageNumber(selected)
-              }
-              containerClassName="flex justify-center gap-2"
-              pageLinkClassName="px-3 py-1 rounded"
-              activeLinkClassName="bg-indigo-600 text-white"
-            />
-          </div>
-        )}
       </div>
+
+      {!showAll && (
+        <ReactPaginate
+          pageCount={pageCount}
+          onPageChange={({ selected }) => setPageNumber(selected)}
+          containerClassName="flex justify-center gap-2 pt-4"
+          activeLinkClassName="bg-indigo-600 text-white px-2 rounded"
+          pageLinkClassName="px-2"
+        />
+      )}
+
+      {/* EDIT MODAL */}
+      {editJob && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
+          <div className="bg-white p-6 rounded-2xl w-full max-w-2xl space-y-3 overflow-y-auto max-h-[90vh]">
+            <h3 className="text-xl font-bold">Edit Job</h3>
+
+            {Object.entries(editForm).map(([key, value]) => (
+              <div key={key}>
+                <label className="text-xs font-bold capitalize">{key}</label>
+
+                {key === "uplift" || key === "offload" ? (
+                  <select
+                    value={value}
+                    onChange={(e) =>
+                      setEditForm({ ...editForm, [key]: e.target.value })
+                    }
+                    className="w-full border px-3 py-2 rounded"
+                  >
+                    <option value="">Select Address</option>
+                    {addresses.map((a) => (
+                      <option key={a._id} value={a.address}>
+                        {a.address}
+                      </option>
+                    ))}
+                  </select>
+                ) : key === "dg" ? (
+                  <select
+                    value={value}
+                    onChange={(e) =>
+                      setEditForm({ ...editForm, dg: e.target.value })
+                    }
+                    className="w-full border px-3 py-2 rounded"
+                  >
+                    <option value="false">No</option>
+                    <option value="true">Yes</option>
+                  </select>
+                ) : (
+                  <input
+                    value={value}
+                    onChange={(e) =>
+                      setEditForm({ ...editForm, [key]: e.target.value })
+                    }
+                    className="w-full border px-3 py-2 rounded"
+                  />
+                )}
+              </div>
+            ))}
+
+            <div className="flex justify-end gap-3 pt-4">
+              <button
+                onClick={() => setEditJob(null)}
+                className="px-6 py-2 border rounded-xl"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleUpdateJob}
+                className="px-6 py-2 bg-indigo-600 text-white rounded-xl font-bold"
+              >
+                Save Changes
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

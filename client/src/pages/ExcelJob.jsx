@@ -29,14 +29,14 @@ const ExcelJob = () => {
 
   const decoded = decodeToken(token);
 
-  if (!["admin", "dispatcher"].includes(decoded?.userType)) {
+  if (!["admin", "dispatcher", "client"].includes(decoded?.userType)) {
     return (
       <div className="max-w-xl mx-auto mt-20 p-6 bg-rose-50 border border-rose-200 rounded-xl text-center">
         <h2 className="text-lg font-bold text-rose-800">
           Access Restricted
         </h2>
         <p className="text-sm text-rose-700 mt-2">
-          Only Admin or Dispatcher can access this page.
+          Only Admin, Dispatcher, or Client can access this page.
         </p>
       </div>
     );
@@ -297,31 +297,37 @@ const ExcelJob = () => {
                   <td className="px-3 py-2">{job.random || "—"}</td>
 
                   <td className="px-3 py-2">
-                    <div className="flex gap-2">
-                      <select
-                        value={assignments[job._id] || job.assignedTo?._id || ""}
-                        onChange={(e) =>
-                          setAssignments({
-                            ...assignments,
-                            [job._id]: e.target.value,
-                          })
-                        }
-                        className="border rounded px-2 py-1 text-xs"
-                      >
-                        <option value="">Select</option>
-                        {drivers.map((d) => (
-                          <option key={d._id} value={d._id}>
-                            {d.username} ({d.userMainId})
-                          </option>
-                        ))}
-                      </select>
-                      <button
-                        onClick={() => handleAssign(job._id)}
-                        className="px-2 bg-slate-800 text-white rounded text-xs"
-                      >
-                        Assign
-                      </button>
-                    </div>
+                    {decoded?.userType === "client" ? (
+                      <span className="text-slate-700 font-medium">
+                        {job.assignedTo?.username || "Unassigned"}
+                      </span>
+                    ) : (
+                      <div className="flex gap-2">
+                        <select
+                          value={assignments[job._id] || job.assignedTo?._id || ""}
+                          onChange={(e) =>
+                            setAssignments({
+                              ...assignments,
+                              [job._id]: e.target.value,
+                            })
+                          }
+                          className="border rounded px-2 py-1 text-xs"
+                        >
+                          <option value="">Select</option>
+                          {drivers.map((d) => (
+                            <option key={d._id} value={d._id}>
+                              {d.username} ({d.userMainId})
+                            </option>
+                          ))}
+                        </select>
+                        <button
+                          onClick={() => handleAssign(job._id)}
+                          className="px-2 bg-slate-800 text-white rounded text-xs"
+                        >
+                          Assign
+                        </button>
+                      </div>
+                    )}
                   </td>
 
                   <td className="px-3 py-2 flex gap-1">

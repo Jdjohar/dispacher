@@ -11,6 +11,7 @@ const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 const cors = require('cors');
 const mongoose = require('mongoose');
+const nodemailer = require('nodemailer');
 
 /************************************************
  * MODELS
@@ -25,7 +26,7 @@ const crypto = require("crypto");
  ************************************************/
 const app = express();
 const PORT = process.env.PORT || 10000;
-  
+
 /************************************************
  * MIDDLEWARE
  ************************************************/
@@ -48,8 +49,8 @@ mongoose.connect(process.env.MONGODB_URL)
     process.exit(1);
   });
 
-  app.use("/api/upload", uploadRoutes);
-  
+app.use("/api/upload", uploadRoutes);
+
 /************************************************
  * AUTH MIDDLEWARE
  ************************************************/
@@ -82,6 +83,48 @@ app.get('/', (req, res) => {
 app.get('/api/health', (req, res) => {
   res.json({ status: 'OK', time: new Date() });
 });
+
+/************************************************
+ * EMAIL HELPER
+ ************************************************/
+const transporter = nodemailer.createTransport({
+  host: process.env.SMTP_HOST || "smtp.gmail.com",
+  port: process.env.SMTP_PORT || 587,
+  secure: false, // true for 465, false for other ports
+  auth: {
+    user: process.env.SMTP_USER,
+    pass: process.env.SMTP_PASS,
+  },
+});
+
+const sendCompletionEmail = async (userEmail, jobNumber, customer) => {
+  if (!process.env.SMTP_USER || !process.env.SMTP_PASS) {
+    console.warn("SMTP credentials missing, skipping email");
+    return;
+  }
+
+  const mailOptions = {
+    from: `"Malwa Transport" <${process.env.FROM_EMAIL || process.env.SMTP_USER}>`,
+    to: userEmail,
+    subject: `Job Completed - ${jobNumber}`,
+    html: `
+      <h2>Job Confirmation</h2>
+      <p>Hello,</p>
+      <p>This is to confirm that the job <strong>${jobNumber}</strong> for <strong>${customer}</strong> has been successfully completed.</p>
+      <p>Thank you for choosing Malwa Transport.</p>
+      <br/>
+      <p>Best Regards,</p>
+      <p>The Malwa Transport Team</p>
+    `,
+  };
+
+  try {
+    await transporter.sendMail(mailOptions);
+    console.log(`Email sent to ${userEmail}`);
+  } catch (error) {
+    console.error("Email send error:", error);
+  }
+};
 
 /************************************************
  * AUTH ROUTES
@@ -161,7 +204,7 @@ app.get('/api/users/:id', auth, role(['admin']), async (req, res) => {
   res.json(await User.findById(req.params.id).select('-password'));
 });
 
-app.get('/api/users/role/:role', auth, role(['admin', 'dispatcher']), async (req, res) => {
+app.get('/api/users/role/:role', auth, role(['admin', 'dispatcher', 'client']), async (req, res) => {
   res.json(
     await User.find({ userType: req.params.role }).select('-password')
   );
@@ -236,6 +279,7 @@ app.post('/api/jobs', auth, async (req, res) => {
     weight: Number(req.body.weight),
     release: req.body.release,
     containerNumber: req.body.containerNumber,
+    createdBy: req.user.userId,
     isCompleted: false,
     status: [{ stage: 'accept' }]
   });
@@ -246,7 +290,12 @@ app.post('/api/jobs', auth, async (req, res) => {
 
 
 app.get('/api/jobs', auth, async (req, res) => {
-  const jobs = await Job.find({ isCompleted: false })
+  const query = { isCompleted: false };
+  if (req.user.userType === 'client') {
+    query.createdBy = req.user.userId;
+  }
+
+  const jobs = await Job.find(query)
     .populate('assignedTo', 'username userType');
   res.json(jobs);
 });
@@ -256,7 +305,12 @@ app.get('/api/jobs/unassigned', auth, async (req, res) => {
 });
 
 app.get('/api/jobs/completed', auth, async (req, res) => {
-  const jobs = await Job.find({ isCompleted: true })
+  const query = { isCompleted: true };
+  if (req.user.userType === 'client') {
+    query.createdBy = req.user.userId;
+  }
+
+  const jobs = await Job.find(query)
     .populate('assignedTo', 'username userType userMainId');
 
   res.json(jobs);
@@ -268,7 +322,7 @@ app.get('/api/jobs/:id', auth, async (req, res) => {
 app.get('/api/jobs/user/:userId', auth, async (req, res) => {
   const { userId } = req.params;
   console.log("User Id", userId);
-  
+
 
   if (!mongoose.Types.ObjectId.isValid(userId)) {
     return res.status(400).json({ message: "Invalid userId" });
@@ -282,7 +336,7 @@ app.get('/api/jobs/user/:userId', auth, async (req, res) => {
   res.json(jobs);
 });
 
-app.put('/api/jobs/:id', auth, role(['admin', 'dispatcher']), async (req, res) => {
+app.put('/api/jobs/:id', auth, role(['admin', 'dispatcher', 'client']), async (req, res) => {
   res.json(await Job.findByIdAndUpdate(req.params.id, req.body, { new: true }));
 });
 
@@ -321,8 +375,8 @@ app.put('/api/jobs/:id/assign', auth, role(['admin', 'dispatcher']), async (req,
   ).populate('assignedTo', 'username userType');
 
 
-  console.log(job,"Job");
-  
+  console.log(job, "Job");
+
   res.json(job);
 });
 
@@ -333,11 +387,16 @@ app.put('/api/jobs/:id/status', auth, async (req, res) => {
     return res.status(400).json({ message: 'Invalid stage' });
   }
 
-  const job = await Job.findById(req.params.id);
+  const job = await Job.findById(req.params.id).populate('createdBy');
 
   job.status.push({ stage });
 
-  if (stage === 'done') job.isCompleted = true;
+  if (stage === 'done') {
+    job.isCompleted = true;
+    if (job.createdBy && job.createdBy.email) {
+      sendCompletionEmail(job.createdBy.email, job.jobNumber, job.customer);
+    }
+  }
 
   await job.save();
   res.json(job);
@@ -357,7 +416,7 @@ app.delete('/api/jobs/:id', auth, role(['admin']), async (req, res) => {
 app.put("/api/jobs/:id/proof", auth, async (req, res) => {
   const { notes, images } = req.body;
 
-  const job = await Job.findById(req.params.id);
+  const job = await Job.findById(req.params.id).populate('createdBy');
 
   if (job.isCompleted) {
     return res.status(400).json({ message: "Already completed" });
@@ -371,6 +430,10 @@ app.put("/api/jobs/:id/proof", auth, async (req, res) => {
 
   job.status.push({ stage: "done" });
   job.isCompleted = true;
+
+  if (job.createdBy && job.createdBy.email) {
+    sendCompletionEmail(job.createdBy.email, job.jobNumber, job.customer);
+  }
 
   await job.save();
   res.json(job);
@@ -398,7 +461,7 @@ app.get('/api/safetyForms/job/:jobNumber', auth, async (req, res) => {
 /************************************************
  * REPORT ROUTES
  ************************************************/
-app.get('/api/reports/jobs', auth, role(['admin', 'dispatcher']), async (req, res) => {
+app.get('/api/reports/jobs', auth, role(['admin', 'dispatcher', 'client']), async (req, res) => {
   const { from, to } = req.query;
 
   const start = new Date(from);
@@ -407,27 +470,40 @@ app.get('/api/reports/jobs', auth, role(['admin', 'dispatcher']), async (req, re
   const end = new Date(to);
   end.setHours(23, 59, 59, 999);
 
-  const jobs = await Job.find({
+  const query = {
     isCompleted: true,
     updatedAt: { $gte: start, $lte: end }
-  }).populate('assignedTo', 'username');
+  };
+  if (req.user.userType === 'client') {
+    query.createdBy = req.user.userId;
+  }
+
+  const jobs = await Job.find(query).populate('assignedTo', 'username');
 
   res.json(jobs);
 });
 
-app.get('/api/reports/today', auth, role(['admin', 'dispatcher']), async (req, res) => {
+app.get('/api/reports/today', auth, role(['admin', 'dispatcher', 'client']), async (req, res) => {
   const start = new Date();
-  start.setHours(0,0,0,0);
-  res.json(await Job.find({ createdAt: { $gte: start } }));
+  start.setHours(0, 0, 0, 0);
+  const query = { createdAt: { $gte: start } };
+  if (req.user.userType === 'client') {
+    query.createdBy = req.user.userId;
+  }
+  res.json(await Job.find(query));
 });
 
-app.get('/api/reports/summary', auth, role(['admin', 'dispatcher']), async (req, res) => {
-  const total = await Job.countDocuments();
-  const completed = await Job.countDocuments({ isCompleted: true });
+app.get('/api/reports/summary', auth, role(['admin', 'dispatcher', 'client']), async (req, res) => {
+  const query = {};
+  if (req.user.userType === 'client') {
+    query.createdBy = req.user.userId;
+  }
+  const total = await Job.countDocuments(query);
+  const completed = await Job.countDocuments({ ...query, isCompleted: true });
   res.json({ total, completed });
 });
 
-app.get('/api/reports/jobs/date/:date', auth, role(['admin', 'dispatcher']), async (req, res) => {
+app.get('/api/reports/jobs/date/:date', auth, role(['admin', 'dispatcher', 'client']), async (req, res) => {
   const { date } = req.params;
 
   // start of day
@@ -439,10 +515,15 @@ app.get('/api/reports/jobs/date/:date', auth, role(['admin', 'dispatcher']), asy
   end.setHours(23, 59, 59, 999);
 
   try {
-    const jobs = await Job.find({
+    const query = {
       isCompleted: true,
       updatedAt: { $gte: start, $lte: end }
-    }).populate('assignedTo', 'username');
+    };
+    if (req.user.userType === 'client') {
+      query.createdBy = req.user.userId;
+    }
+
+    const jobs = await Job.find(query).populate('assignedTo', 'username');
 
     res.json(jobs);
   } catch (err) {
@@ -454,8 +535,8 @@ app.get('/api/reports/jobs/date/:date', auth, role(['admin', 'dispatcher']), asy
 /************************************************
  * START SERVER
  ************************************************/
-// app.listen(PORT, () => {
-//   console.log(`🚀 Server running on port ${PORT}`);
-// });
+app.listen(PORT, () => {
+  console.log(`🚀 Server running on port ${PORT}`);
+});
 
 module.exports = app;

@@ -19,6 +19,7 @@ const jobSchema = new mongoose.Schema(
     containerNumber: String,
 
     assignedTo: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
+    createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
     proof: {
       notes: String,
       images: [String], // Cloudinary URLs

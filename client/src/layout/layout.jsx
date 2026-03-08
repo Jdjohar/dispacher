@@ -23,6 +23,13 @@ const menuConfig = {
     { path: "/container-dashboard/new-job", label: "New Jobs" },
     { path: "/container-dashboard/finished-job", label: "History" },
   ],
+  client: [
+    { path: "/client-dashboard", label: "Dashboard" },
+    { path: "/client-dashboard/create-job", label: "Create Job" },
+    { path: "/client-dashboard/job-lists", label: "Job List" },
+    { path: "/client-dashboard/completed-job", label: "Completed Jobs" },
+    { path: "/client-dashboard/report-section", label: "Reports" },
+  ],
 };
 
 const Layout = ({ children, role }) => {

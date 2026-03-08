@@ -14,7 +14,7 @@ const CreateJob = () => {
       navigate("/login");
       return;
     }
-    if (!["admin", "dispatcher"].includes(userInfo.userType)) {
+    if (!["admin", "dispatcher", "client"].includes(userInfo.userType)) {
       navigate("/unauthorized");
     }
   }, [token, userInfo, navigate]);

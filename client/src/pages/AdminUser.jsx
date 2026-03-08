@@ -72,8 +72,8 @@ const AdminUser = () => {
           <h2 className="text-2xl font-bold text-slate-800">
             Add New User
           </h2>
-          <p className="text-slate-500 text-sm">
-            Create driver or dispatcher accounts
+            <p className="text-slate-500 text-sm">
+            Create driver, dispatcher, or client accounts
           </p>
         </div>
 
@@ -84,8 +84,8 @@ const AdminUser = () => {
             <label className="block text-sm font-bold mb-3">
               Account Type
             </label>
-            <div className="grid grid-cols-2 gap-4">
-              {["container", "dispatcher"].map((type) => (
+            <div className="grid grid-cols-3 gap-4">
+              {["container", "dispatcher", "client"].map((type) => (
                 <button
                   key={type}
                   type="button"
@@ -96,7 +96,7 @@ const AdminUser = () => {
                       : "border-slate-200 text-slate-500"
                   }`}
                 >
-                  {type === "container" ? "Driver" : "Dispatcher"}
+                  {type === "container" ? "Driver" : type === "dispatcher" ? "Dispatcher" : "Client"}
                 </button>
               ))}
             </div>

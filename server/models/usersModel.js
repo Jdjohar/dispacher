@@ -7,7 +7,7 @@ const userSchema = new mongoose.Schema(
     password: { type: String, required: true },
     userType: {
       type: String,
-      enum: ['dispatcher', 'container', 'admin'],
+      enum: ['dispatcher', 'container', 'admin', 'client'],
       default: 'container',
     },
     userMainId: { type: String, index: true },

@@ -24,6 +24,9 @@ import ContainerDashPage from "./pages/ContainerDashPage";
 import NewJob from "./pages/NewJob";
 import ContainerJob from "./pages/ContainerJob";
 
+// Client
+import ClientDashPage from "./pages/ClientDashPage";
+
 /* 🔐 Role Guard */
 const PrivateRoute = ({ role }) => {
   const { isLoggedIn, user } = useAuth();
@@ -99,6 +102,24 @@ function App() {
           <Route index element={<ContainerDashPage />} />
           <Route path="new-job" element={<NewJob />} />
           <Route path="finished-job" element={<ContainerJob />} />
+        </Route>
+      </Route>
+
+      {/* CLIENT */}
+      <Route element={<PrivateRoute role="client" />}>
+        <Route
+          path="/client-dashboard/*"
+          element={
+            <Layout role="client">
+              <Outlet />
+            </Layout>
+          }
+        >
+          <Route index element={<ClientDashPage />} />
+          <Route path="create-job" element={<CreateJob />} />
+          <Route path="job-lists" element={<ExcelJob />} />
+          <Route path="completed-job" element={<CompletedJob />} />
+          <Route path="report-section" element={<ReportSection />} />
         </Route>
       </Route>
     </Routes>
